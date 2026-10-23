@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     translation_base_url: str = ""
     translation_model: str = ""
     translation_api_key: str = ""
+    translation_key_file: str = "./data/translation.key"
+    translation_allow_local: bool = False
     translation_timeout: float = Field(default=45, ge=1, le=300)
     translation_concurrency: int = Field(default=2, ge=1, le=8)
     translation_queue_size: int = Field(default=32, ge=1, le=128)

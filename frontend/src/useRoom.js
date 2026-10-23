@@ -10,6 +10,7 @@ export function useRoom(roomId, onEvent) {
   const [hasMore, setHasMore] = useState(false);
   const socket = useRef(null);
   const messagesRef = useRef([]);
+  const partialOrder = useRef(0);
   const callback = useRef(onEvent);
   callback.current = onEvent;
   messagesRef.current = messages;
@@ -45,9 +46,10 @@ export function useRoom(roomId, onEvent) {
         } else if (payload.type === 'message.upsert' || payload.type === 'message.ack') upsert([payload.message]);
         else if (payload.type === 'room.members') setRoom(current => ({ ...current, members: payload.members }));
         else if (payload.type === 'transcript.partial') {
+          const receivedOrder = ++partialOrder.current;
           setPartials(current => {
             const next = { ...current };
-            if (payload.text) next[payload.segment_id] = payload;
+            if (payload.text) next[payload.segment_id] = { ...payload, receivedOrder };
             else delete next[payload.segment_id];
             return next;
           });

@@ -210,16 +210,73 @@ def test_missing_credentials_cannot_open_socket(system, actor):
             pass
 
 
-def test_unknown_voice_waits_for_speaker_before_translation(system, actor):
-    client, app, translator, _ = system
+def test_legacy_unknown_voice_still_allows_speaker_assignment(system, actor):
+    _, app, translator, _ = system
     owner = actor("alice")
     room_id = make_room(owner)
-    message = client.portal.call(app.state.messages.submit, room_id, owner.user["id"],
-                                 "Hello", "uncertain-voice", None, "voice")
-    assert message["status"] == "needs_speaker"
+    with app.state.database.session() as db:
+        message = Message(room_id=room_id, author_id=owner.user["id"], text="Hello",
+                          client_message_id="uncertain-voice", source="voice", status="needs_speaker")
+        db.add(message)
+        db.commit()
+        message_id = message.id
     assert translator.calls == []
-    response = owner.post(f"/api/rooms/{room_id}/messages/{message['id']}/speaker", json={"speaker": "B"})
+    response = owner.post(f"/api/rooms/{room_id}/messages/{message_id}/speaker", json={"speaker": "B"})
     assert response.status_code == 200
     translated = wait_message(owner, room_id, "translated")
     assert translated["source_language"] == "en"
     assert translated["translation"] == "Xin chào"
+
+
+@pytest.mark.parametrize(("mode", "side"), [("shared", "A"), ("remote", "A"), ("remote", "B")])
+def test_voice_uses_authenticated_role_and_automatically_translates(system, actor, monkeypatch, mode, side):
+    from app.speech import Transcript
+    from tests.test_speech import SILENCE, VOICE, MarkedVad
+
+    _, _, translator, recognizer = system
+    monkeypatch.setattr("app.speech.webrtcvad.Vad", lambda _: MarkedVad())
+    # A deliberately wrong detected language must not change the authenticated role.
+    recognizer.result = Transcript("Xin chào" if side == "A" else "你好", "fi", .01)
+    owner = actor("alice")
+    room = owner.post("/api/rooms", json={"mode": mode, "language_a": "vi", "language_b": "zh"}).json()
+    speaker = owner
+    if side == "B":
+        speaker = actor("guest")
+        join(owner, speaker, room["id"])
+    with speaker.socket(room["id"]) as socket:
+        socket.receive_json()
+        socket.send_json({"type": "audio.start", "speaker": "B" if side == "A" else "A", "language": "en"})
+        assert socket.receive_json()["recording"] is True
+        audio = VOICE * 50 + SILENCE * 20
+        for start in range(0, len(audio), 16000):
+            socket.send_bytes(audio[start:start + 16000])
+        socket.send_json({"type": "audio.stop"})
+        while True:
+            event = socket.receive_json()
+            if event["type"] == "audio.state" and not event["recording"]:
+                break
+    translated = wait_message(owner, room["id"], "translated")
+    source, target = ("vi", "zh") if side == "A" else ("zh", "vi")
+    assert translated["speaker"] == side
+    assert translated["source_language"] == source
+    assert translated["target_language"] == target
+    assert len(recognizer.calls) >= 1
+    assert all(call[1] == source for call in recognizer.calls)
+    assert translator.calls == [(recognizer.result.text, source, target)]
+
+
+def test_shared_voice_service_rejects_role_spoof_and_never_waits_for_assignment(system, actor):
+    client, app, _, _ = system
+    owner = actor("alice")
+    room_id = make_room(owner)
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as error:
+        client.portal.call(app.state.messages.submit, room_id, owner.user["id"],
+                           "Xin chào", "spoofed-voice", "B", "voice")
+    assert error.value.status_code == 403
+    message = client.portal.call(app.state.messages.submit, room_id, owner.user["id"],
+                                 "Xin chào", "account-voice", None, "voice")
+    assert message["status"] == "pending"
+    assert message["speaker"] == "A"
+    assert wait_message(owner, room_id, "translated")["translation"] == "Hello"

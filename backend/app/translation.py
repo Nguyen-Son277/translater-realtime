@@ -22,6 +22,7 @@ class LocalTranslator:
         self.settings = settings
         self.client = httpx.AsyncClient(
             timeout=settings.translation_timeout, transport=transport, follow_redirects=False,
+            trust_env=False,
         )
 
     @property
@@ -54,7 +55,26 @@ class LocalTranslator:
             if response.status_code in {401, 403}:
                 raise TranslationError("upstream_auth")
             if response.status_code == 429:
+                try:
+                    error_code = response.json().get("error", {}).get("code")
+                except (ValueError, AttributeError):
+                    error_code = None
+                if error_code in {"insufficient_quota", "quota_exceeded", "billing_hard_limit_reached"}:
+                    raise TranslationError("quota_exceeded")
                 raise TranslationError("rate_limited")
+            if response.status_code == 402:
+                raise TranslationError("quota_exceeded")
+            if response.status_code == 404:
+                raise TranslationError("model_not_found")
+            if response.status_code == 400:
+                try:
+                    error_code = response.json().get("error", {}).get("code")
+                except (ValueError, AttributeError):
+                    error_code = None
+                if error_code in {"model_not_found", "invalid_model"}:
+                    raise TranslationError("model_not_found")
+            if 300 <= response.status_code < 400:
+                raise TranslationError("unavailable")
             response.raise_for_status()
             result = response.json()["choices"][0]["message"]["content"]
             if not isinstance(result, str) or not result.strip() or len(result) > 32000:
@@ -113,7 +133,8 @@ class TranslationJobs:
                     if not message or message.status != "pending":
                         return
                     text, source, target = message.text, message.source_language, message.target_language
-                translation = await self.translator.translate(text, source, target)
+                    owner_id = db.get(Room, message.room_id).owner_id
+                translation = await self.translator.translate(text, source, target, owner_id=owner_id)
                 await self.finish(message_id, translation=translation)
         except TranslationError as exc:
             await self.finish(message_id, error=exc.code)

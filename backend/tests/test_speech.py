@@ -54,30 +54,37 @@ def test_silence_does_not_start_another_preview_while_waiting_to_finalize():
     assert [piece.kind for piece in pieces] == ["final"]
 
 
-@pytest.mark.parametrize(("mode", "language", "confidence", "expected"), [
-    ("shared", "vi", .99, "A"), ("shared", "en", .99, "B"),
-    ("shared", "en", .3, None), ("shared", "fr", .99, None),
-    ("remote", "vi", .2, "B"),
-])
-async def test_speaker_assignment_and_final_transcription(mode, language, confidence, expected):
+@pytest.mark.parametrize("mode", ["shared", "remote"])
+@pytest.mark.parametrize("side", ["A", "B"])
+@pytest.mark.parametrize(("language", "confidence"), [("en", .99), ("fi", .1), ("vi", .2), ("zh", .99)])
+async def test_account_role_locks_preview_and_final_language(mode, side, language, confidence):
     recognizer = FakeRecognizer()
-    recognizer.result = Transcript("Xin chào", language, confidence)
+    text = "Xin chào" if side == "A" else "你好"
+    recognizer.result = Transcript(text, language, confidence)
     sent, finals = [], []
+    previewed = asyncio.Event()
 
     async def broadcast(room_id, payload):
         sent.append(payload)
+        if payload["text"]:
+            previewed.set()
 
     async def on_final(segment_id, text, speaker):
         finals.append((segment_id, text, speaker))
 
-    connection = SimpleNamespace(side="B", user_id="test-user", send=lambda _: None)
-    room = SimpleNamespace(id="room", mode=mode, language_a="vi", language_b="en")
+    connection = SimpleNamespace(side=side, user_id="test-user", send=lambda _: None)
+    room = SimpleNamespace(id="room", mode=mode, language_a="vi", language_b="zh")
     stream = AudioStream(recognizer, connection, room, Settings(_env_file=None),
                          SimpleNamespace(broadcast=broadcast), on_final)
-    stream.offer(AudioPiece("final", "segment-1", VOICE * 50))
-    await stream.stop(flush=False)
-    assert finals == [("segment-1", "Xin chào", expected)]
-    assert recognizer.calls[0][1] == ("en" if mode == "remote" else None)
+    try:
+        stream.offer(AudioPiece("partial", "segment-1", VOICE * 50))
+        await asyncio.wait_for(previewed.wait(), 1)
+        stream.offer(AudioPiece("final", "segment-1", VOICE * 50))
+    finally:
+        await stream.stop(flush=False)
+    assert finals == [("segment-1", text, side)]
+    assert [call[1] for call in recognizer.calls] == ["vi" if side == "A" else "zh"] * 2
+    assert sent[0]["speaker"] == side
     assert sent[-1]["text"] == ""
 
 

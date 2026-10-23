@@ -21,7 +21,9 @@ export async function api(path, options = {}) {
   if (!response.ok) {
     const detail = Array.isArray(body.detail)
       ? body.detail.map(item => item.msg.replace(/^Value error, /, '')).join(' ')
-      : body.detail;
+      : typeof body.detail === 'object'
+        ? ERROR_LABELS[body.detail?.code] || 'Không kiểm tra được kết nối. Vui lòng thử lại.'
+        : body.detail;
     if (response.status === 401 && path !== '/auth/me' && !path.startsWith('/auth/login')) {
       window.dispatchEvent(new Event('session-expired'));
     }
@@ -43,7 +45,10 @@ export const LANGUAGES = {
 
 export const ERROR_LABELS = {
   not_configured: 'Dịch thuật chưa được cấu hình.',
-  upstream_auth: 'Dịch vụ dịch chưa chấp nhận kết nối.',
+  upstream_auth: 'API key không hợp lệ hoặc chưa có quyền truy cập model.',
+  model_not_found: 'Không tìm thấy model. Kiểm tra tên model và Base URL.',
+  quota_exceeded: 'Tài khoản API đã hết hạn mức hoặc cần nạp tiền tại nhà cung cấp.',
+  configuration_error: 'Không đọc được cấu hình dịch. Chủ phòng cần lưu lại API key hoặc liên hệ quản trị viên.',
   rate_limited: 'Dịch vụ đang bận, hãy thử lại sau.',
   timeout: 'Dịch lâu hơn dự kiến, hãy thử lại.',
   unavailable: 'Chưa kết nối được dịch vụ dịch.',

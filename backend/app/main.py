@@ -18,11 +18,13 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 
+from app.account_translation import AccountTranslator
 from app.auth import (
     COOKIE_NAME,
     create_session,
@@ -43,7 +45,8 @@ from app.models import Membership, Message, Room, Session, User, utcnow
 from app.schemas import AssignSpeaker, Credentials, JoinRoom, RoomCreate, TextMessage
 from app.services import MessageService
 from app.speech import AudioStream, WhisperRecognizer
-from app.translation import LocalTranslator, TranslationJobs
+from app.translation import TranslationJobs
+from app.translation_settings import settings_router
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -55,7 +58,7 @@ def create_app(settings=None, recognizer=None, translator=None):
     database = Database(settings.database_url)
     hub = Hub()
     recognizer = recognizer or WhisperRecognizer(settings)
-    translator = translator or LocalTranslator(settings)
+    translator = translator or AccountTranslator(settings, database)
     jobs = TranslationJobs(database, hub, translator, settings)
     messages = MessageService(database, hub, jobs)
     attempts = defaultdict(deque)
@@ -85,6 +88,15 @@ def create_app(settings=None, recognizer=None, translator=None):
     app.state.translator = translator
     app.state.hub = hub
     app.state.messages = messages
+    app.include_router(settings_router(database, settings, translator))
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(request, exc):
+        # Pydantic's default input field can echo submitted API keys.
+        return JSONResponse({"detail": [
+            {"loc": error["loc"], "msg": error["msg"], "type": error["type"]}
+            for error in exc.errors()
+        ]}, status_code=422)
 
     @app.middleware("http")
     async def same_origin(request: Request, call_next):
@@ -123,9 +135,15 @@ def create_app(settings=None, recognizer=None, translator=None):
                             status_code=200 if ok else 503)
 
     @app.get("/api/config")
-    def config(user=Depends(current_user)):
+    def config(room_id: str | None = None, user=Depends(current_user)):
+        owner_id = user.id
+        if room_id:
+            with database.session() as db:
+                room, _ = require_room(db, room_id, user.id)
+                owner_id = room.owner_id
         return {"languages": LANGUAGES, "speech": recognizer.state,
-                "translation_configured": translator.configured}
+                "translation_configured": translator.configured_for(owner_id),
+                "translation_is_owner": owner_id == user.id}
 
     @app.post("/api/auth/register", status_code=201)
     async def register(body: Credentials, request: Request, response: Response):

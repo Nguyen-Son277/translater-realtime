@@ -204,17 +204,6 @@ class AudioStream:
             "speaker": speaker, "user_id": self.connection.user_id,
         })
 
-    def speaker_for(self, transcript):
-        if self.room.mode == "remote":
-            return self.connection.side
-        if transcript.confidence < self.settings.language_confidence:
-            return None
-        if transcript.language == self.room.language_a:
-            return "A"
-        if transcript.language == self.room.language_b:
-            return "B"
-        return None
-
     async def run(self):
         while True:
             await self.wake.wait()
@@ -227,9 +216,7 @@ class AudioStream:
             else:
                 self.wake.clear()
                 continue
-            language = None
-            if self.room.mode == "remote":
-                language = self.room.language_a if self.connection.side == "A" else self.room.language_b
+            language = self.room.language_a if self.connection.side == "A" else self.room.language_b
             started = time.monotonic()
             self.processing = True
             try:
@@ -239,7 +226,7 @@ class AudioStream:
                         continue
                 else:
                     result = await self.recognizer.transcribe(piece.pcm, language)
-                speaker = self.speaker_for(result)
+                speaker = self.connection.side
                 if piece.kind == "final":
                     if result.text:
                         await self.on_final(piece.segment_id, result.text, speaker)

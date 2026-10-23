@@ -21,7 +21,7 @@ class MessageService:
     async def submit(self, room_id, user_id, text, client_message_id, speaker=None, source="text"):
         with self.database.session() as db:
             room, member = require_room(db, room_id, user_id)
-            if room.mode == "remote":
+            if room.mode == "remote" or source == "voice":
                 if speaker and speaker != member.side:
                     raise HTTPException(403, "Bạn chỉ có thể gửi lời của mình.")
                 speaker = member.side

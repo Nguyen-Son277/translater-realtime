@@ -1,4 +1,4 @@
-import { ArrowUpRight, AudioLines, LogOut, MessageCircleMore, X } from 'lucide-react';
+import { ArrowUpRight, AudioLines, LogOut, MessageCircleMore, Settings, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from './auth';
@@ -16,7 +16,8 @@ export function Header() {
   return <header className="site-header">
     <Brand />
     <div className="header-right"><span className="private-badge"><AudioLines size={14} /> Không khoảng cách ngôn ngữ</span>
-      <span className="user-chip"><span className="avatar">{user.username[0].toUpperCase()}</span><span>{user.username}</span></span>
+      <Link className="text-link settings-nav" to="/settings/translation" aria-label="Cài đặt dịch thuật" title="Cài đặt dịch thuật"><Settings size={18} /><span>Cài đặt dịch thuật</span></Link>
+      <span className="user-chip" title={user.username}><span className="avatar">{user.username[0].toUpperCase()}</span><span>{user.username}</span></span>
       <button className="icon-btn" aria-label="Đăng xuất" title={error || 'Đăng xuất'} onClick={() => logout().catch(err => setError(err.message))}><LogOut size={18} /></button>
       {error && <span role="alert" className="header-error">{error}</span>}
     </div>

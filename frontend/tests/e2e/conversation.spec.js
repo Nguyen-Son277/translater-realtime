@@ -41,6 +41,8 @@ test('shared phone shows both languages on both sides and rotates A', async ({ p
   }
   await send(page, 'B', 'How are you?');
   await expect(page.getByText('Bạn khỏe không?', { exact: true })).toHaveCount(2);
+  await expect(page.getByRole('log', { name: 'Hội thoại người A' }).locator('.message-text').first()).toHaveText('How are you?');
+  await expect(page.getByText('Bạn là A · Tiếng Việt', { exact: false })).toBeVisible();
   await page.getByRole('button', { name: 'Xoay màn hình người A 180 độ' }).click();
   await expect(page.getByRole('button', { name: 'Xoay màn hình người A 180 độ' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('region', { name: 'Màn hình người A' })).toHaveCSS('transform', 'matrix(-1, 0, 0, -1, 0, 0)');
@@ -65,6 +67,7 @@ test('two signed-in phones join by invitation and exchange both directions', asy
   await expect(b.getByRole('heading', { name: 'Cùng một cuộc trò chuyện.' })).toBeVisible();
   await b.getByRole('button', { name: 'Vào phòng', exact: true }).click();
   await expect(b.getByRole('status')).toHaveText('Đã kết nối');
+  await expect(b.getByText('Bạn là B · English', { exact: false })).toBeVisible();
   await expect(a.getByText('Đang chờ người còn lại.', { exact: false })).toHaveCount(0);
   await Promise.all([send(a, 'A', 'Xin chào'), send(b, 'B', 'How are you?')]);
   for (const page of [a, b]) {
@@ -92,6 +95,8 @@ test('microphone denial leaves text conversation usable', async ({ page }) => {
 });
 
 test('AudioWorklet sends live PCM and stopping commits the last spoken segment', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
   await page.addInitScript(() => {
     // A deterministic live audio source exercises AudioWorklet and WebSocket;
     // only the server's expensive recognizer is replaced by the test adapter.
@@ -110,13 +115,23 @@ test('AudioWorklet sends live PCM and stopping commits the last spoken segment',
     });
   });
   await register(page); await create(page);
+  await page.screenshot({ path: 'test-results/voice-before.png', fullPage: true });
+  page.on('console', message => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
   await page.getByRole('button', { name: 'Bắt đầu nghe', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Dừng micro', exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Màn hình người A' })).toHaveClass(/capturing/);
+  await expect(page.getByRole('region', { name: 'Màn hình người B' })).not.toHaveClass(/capturing/);
   await expect(page.getByText('Đang nghe người A…', { exact: false }).first()).toBeVisible({ timeout: 12000 });
+  await page.screenshot({ path: 'test-results/voice-listening.png', fullPage: true });
   await page.getByRole('button', { name: 'Dừng micro', exact: true }).click();
   await expect(page.getByText('Hello', { exact: true })).toHaveCount(2);
   await expect(page.getByRole('button', { name: 'Bắt đầu nghe', exact: true })).toBeVisible();
+  await expect(page.getByText('Chọn người nói để dịch câu này:')).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Màn hình người A' })).not.toHaveClass(/capturing/);
   await page.evaluate(() => window.__audioSource.context.close());
+  expect(errors).toEqual([]);
 });
 
 test('reconnecting socket resyncs missed messages without duplication', async ({ page }) => {

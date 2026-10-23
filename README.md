@@ -12,17 +12,17 @@ Cần Docker Engine và Compose từ 2.24 trở lên. Mặc định nhận dạn
 cp .env.example .env
 ```
 
-Sửa ba biến sau trong `.env` theo máy chủ model của bạn:
+API dịch được cấu hình riêng cho từng tài khoản trên giao diện, không cần đặt API key trong `.env`. Sau khi đăng nhập, mở **Cài đặt dịch thuật**, nhập **Base URL**, **Tên model**, **API key**, rồi bấm **Lưu** và **Kiểm tra kết nối**.
 
-```dotenv
-TRANSLATION_BASE_URL=http://host.docker.internal:1234/v1
-TRANSLATION_MODEL=ten-model-cua-ban
-TRANSLATION_API_KEY=khoa-cua-ban
-```
+Chủ phòng trả phí dịch cho cả hai chiều bằng tài khoản API của mình. Người tham gia không cần nhập key để dùng phòng của người khác. Nhà cung cấp API tính phí trực tiếp; Song Ngữ không thu tiền hoặc quản lý số dư. Kiểm tra kết nối gửi một câu Việt–Trung ngắn và có thể phát sinh phí. Lưu thay đổi không tự gửi lại câu lỗi; quay về phòng và bấm **Thử lại** cho câu cần dịch.
 
-`TRANSLATION_API_KEY` có thể để trống nếu máy chủ model không yêu cầu xác thực. Dịch vụ cần chấp nhận `POST /v1/chat/completions` với `model`, `messages`, `temperature: 0`, `stream: false`, và trả về `choices[0].message.content` dạng chuỗi. Base URL có thể chứa hoặc không chứa `/v1`; không thêm `/chat/completions`.
+Chọn model hỗ trợ ngôn ngữ cần dùng, ví dụ Việt–Trung. Dịch vụ cần chấp nhận `POST /v1/chat/completions` với `model`, `messages`, `temperature: 0`, `stream: false`, và trả về `choices[0].message.content` dạng chuỗi. Base URL có thể chứa hoặc không chứa `/v1`; không thêm `/chat/completions`, thông tin đăng nhập, query hoặc fragment. Mặc định chỉ cho HTTPS công khai, kiểm tra IP DNS và kết nối tới IP đã kiểm tra; không theo redirect và không sử dụng proxy từ biến môi trường.
 
-Nếu model chạy trên cùng máy host, `host.docker.internal` đã được cấu hình cho Docker trên Linux. Dịch vụ model phải lắng nghe trên địa chỉ Docker truy cập được, ví dụ `0.0.0.0:1234`; dịch vụ chỉ bind `127.0.0.1` của host sẽ không nhận kết nối qua Docker gateway. Nếu model ở máy khác, dùng IP hoặc tên miền của máy đó.
+Để dùng model local trên một triển khai tin cậy, quản trị viên đặt `TRANSLATION_ALLOW_LOCAL=true` trong `.env` và tạo lại container backend. Tùy chọn này cho phép người dùng gửi yêu cầu tới HTTP và địa chỉ mạng nội bộ, nên chỉ bật khi tin cậy các tài khoản sử dụng ứng dụng. Nếu model chạy trên cùng máy host, dùng Base URL `http://host.docker.internal:1234/v1` trong giao diện Docker; dịch vụ model phải bind địa chỉ Docker truy cập được, ví dụ `0.0.0.0:1234`. API không cần xác thực có thể để trống khóa khi tạo cấu hình.
+
+API key được mã hóa bằng Fernet trước khi lưu vào SQLite. Khóa mã hóa được tạo một lần với quyền `0600` khi lưu API key đầu tiên; mặc định dev ở `backend/data/translation.key`, Docker ở `/data/translation.key` trong volume `database`. Sao lưu **cả SQLite và file khóa mã hóa**, giữ khóa ở nơi an toàn, không đưa vào Git. Mất hoặc đổi file khóa sẽ làm key cũ không đọc được; người dùng cần lưu lại API key. Khi mở lại cài đặt, API chỉ trả trạng thái có khóa; ô khóa trống giữ nguyên khóa cũ. Muốn loại bỏ khóa, xóa cấu hình rồi tạo lại. Xóa cấu hình không xóa lịch sử.
+
+Các biến cũ `TRANSLATION_BASE_URL`, `TRANSLATION_MODEL`, `TRANSLATION_API_KEY` không còn được dùng làm cấu hình dịch chung hoặc trả phí thay người dùng. Tài khoản đã có cần thiết lập lại API trên giao diện sau khi nâng cấp; migration giữ nguyên tài khoản và hội thoại. Các lượt dịch đang chạy giữ cấu hình đã lấy, lượt tiếp theo dùng cấu hình mới. Khi khôi phục hoặc chuyển máy, giữ `TRANSLATION_KEY_FILE` trỏ tới file khóa đã sao lưu.
 
 ```bash
 docker compose up --build -d
@@ -56,11 +56,12 @@ Mở địa chỉ HTTPS được cấp trên cả hai điện thoại. Tạo và
 ## Sử dụng
 
 - **Tài khoản:** tên đăng nhập 3–32 ký tự `a-z`, số, `_`, `-`, `.`; mật khẩu 8–128 ký tự. Phiên có hiệu lực 7 ngày. Bản đầu dùng tài khoản nội bộ bằng tên đăng nhập và mật khẩu.
-- **Một máy chung:** chủ phòng sử dụng cả hai phía. Mỗi phía đều thấy nguyên văn và bản dịch; bấm nút xoay để phía A đọc khi ngồi đối diện. Chọn phía cần nhập chữ hoặc bắt đầu micro và nói lần lượt.
+- **Một máy chung:** mỗi phía đều thấy nguyên văn và bản dịch; bấm nút xoay để phía A đọc khi ngồi đối diện. Nhập chữ có thể chọn phía A/B. Micro của tài khoản chủ phòng luôn là A và chỉ nhận dạng bằng ngôn ngữ A đã chọn; không dùng chung tài khoản để tự phân biệt hai giọng nói. Muốn cả hai người nói bằng ngôn ngữ riêng, tạo phòng hai máy với hai tài khoản.
 - **Hai máy riêng:** chủ phòng là A, người được mời là B; cả hai cần tài khoản riêng. Liên kết/QR dùng một lần và hết hạn sau 24 giờ. Phòng tối đa hai thành viên; hai máy có thể gửi giọng nói độc lập.
 - **Ngôn ngữ:** Việt, Anh, Nhật, Hàn, Trung (bản dịch chữ giản thể), Pháp, Đức, Tây Ban Nha; mặc định Việt–Anh. Cặp ngôn ngữ và chế độ giữ cố định trong phòng.
 - **Micro:** nghe liên tục sau khi bấm bắt đầu. Khi chuyển ứng dụng, rời trang hoặc mất kết nối, micro dừng; cần bấm bắt đầu lại. Nhập chữ vẫn dùng được khi không cấp quyền micro.
-- **Người nói:** dùng chung máy sẽ gán A/B theo ngôn ngữ, không nhận diện danh tính giọng nói. Câu thiếu độ tin cậy sẽ chờ chọn A/B trước khi dịch. Hai người cần nói lần lượt, tránh nói chồng trong cùng một micro.
+- **Người nói:** giọng nói luôn gán theo vai tài khoản đã xác thực: chủ phòng A, người tham gia B. Cả phụ đề tạm và câu chốt đều khóa nhận dạng theo ngôn ngữ của vai đó, không tự đoán sang ngôn ngữ khác. Khi micro đang mở, nói đúng ngôn ngữ cạnh nhãn “Bạn là A/B”; câu chốt tự được dịch, không cần chọn người nói. Câu cũ chưa xác định vẫn có thể chọn A/B để dịch; âm thanh không lưu nên câu đã nhận sai cần nói lại. Whisper `base` vẫn có thể nhận sai từ dù đã khóa ngôn ngữ.
+- **Câu mới và lịch sử:** câu mới nhất ở trên cùng, phụ đề đang nói nằm trước các câu đã chốt. Khi có phụ đề hoặc câu mới, các khung tự cuộn lên đầu, kể cả lúc đang xem lịch sử. Nút “Xem hội thoại trước” nằm cuối danh sách và tải câu cũ giữ vị trí đang đọc. Bản dịch cập nhật tại chỗ; thử lại câu cũ không thay đổi thứ tự thời gian.
 - **Lịch sử:** lưu chữ và bản dịch đến khi chủ phòng xóa toàn bộ hội thoại. Cả hai thành viên xem lại được. Âm thanh chỉ ở bộ nhớ trong quá trình xử lý, không ghi file hoặc lưu SQLite.
 
 ## Luồng xử lý và giới hạn
@@ -98,7 +99,7 @@ python3 -m venv .venv
 cp .env.example backend/.env
 ```
 
-Sửa `backend/.env`: dùng URL model truy cập từ host, ví dụ `http://127.0.0.1:1234/v1`, và giữ `COOKIE_SECURE=false` khi thử HTTP localhost.
+Giữ `COOKIE_SECURE=false` trong `backend/.env` khi thử HTTP localhost. Đăng nhập và nhập API tại **Cài đặt dịch thuật**. Nếu dùng model local, đặt `TRANSLATION_ALLOW_LOCAL=true` trong `backend/.env`, khởi động lại backend và dùng URL truy cập từ host, ví dụ `http://127.0.0.1:1234/v1`.
 
 Terminal backend:
 
@@ -156,6 +157,9 @@ Lệnh tải/dùng model local, nhận dạng 6 giây đầu và in nội dung, 
 - `POST /api/rooms/{id}/messages` với `{ "client_message_id": "uuid", "speaker": "A", "text": "Xin chào" }`. Ở phòng hai máy, backend xác định vai từ tài khoản và từ chối giả mạo vai người khác.
 - `POST /api/rooms/{id}/messages/{message_id}/retry`; `/speaker` với `{ "speaker": "B" }` cho câu chờ xác định người nói.
 - `GET /api/config` trả danh sách ngôn ngữ và trạng thái dịch/nhận dạng; không trả API key hay URL model.
+- `GET /api/config?room_id=...` kiểm tra trạng thái cấu hình của chủ phòng, yêu cầu tư cách thành viên; trả `translation_is_owner` để hướng dẫn cấu hình đúng người.
+- `GET/PUT/DELETE /api/settings/translation`: đọc/lưu/xóa cấu hình tài khoản đang đăng nhập. PUT nhận `base_url`, `model`, `api_key` tùy chọn; khóa trống giữ khóa cũ. GET/PUT chỉ trả `configured`, `base_url`, `model`, `has_api_key`.
+- `POST /api/settings/translation/test`: dịch một câu Việt–Trung bằng cấu hình đã lưu; lỗi trả `detail.code` an toàn, không trả lỗi thô của nhà cung cấp.
 - `WS /ws/rooms/{id}?from_sequence=...`: xác thực bằng cookie; gửi JSON `audio.start`, `audio.stop`, `pong`, `text.submit`; âm thanh là gói nhị phân PCM little-endian. Nhận `room.snapshot`, `room.members`, `message.upsert`, `message.ack`, `transcript.partial`, `audio.state`, `ping`, `error`, `room.deleted`.
 
 Mật khẩu được băm Argon2id; cookie HttpOnly, SameSite=Lax; session và token mời chỉ lưu SHA-256 trong SQLite. Backend kiểm tra origin và tư cách thành viên trên HTTP/WebSocket. Liên kết mời dùng fragment để mã mời không xuất hiện trong URL request/access log. API key dịch chỉ được dùng từ backend.

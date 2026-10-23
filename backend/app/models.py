@@ -29,6 +29,14 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class TranslationSetting(Base):
+    __tablename__ = "translation_settings"
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    base_url: Mapped[str] = mapped_column(String(2048))
+    model: Mapped[str] = mapped_column(String(200))
+    encrypted_api_key: Mapped[str | None] = mapped_column(Text)
+
+
 class Session(Base):
     __tablename__ = "sessions"
     digest: Mapped[str] = mapped_column(String(64), primary_key=True)

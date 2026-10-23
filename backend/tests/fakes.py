@@ -12,7 +12,10 @@ class FakeTranslator:
         self.fail = False
         self.delay = 0.01
 
-    async def translate(self, text, source, target):
+    def configured_for(self, owner_id):
+        return True
+
+    async def translate(self, text, source, target, *, owner_id=None):
         self.calls.append((text, source, target))
         await asyncio.sleep(self.delay)
         if self.fail:

@@ -1,6 +1,6 @@
-import { ArrowLeft, AudioLines, Check, ChevronUp, Copy, Keyboard, Link2, Mic, MicOff, Radio, RefreshCw, RotateCw, Send, ShieldCheck, Wifi, WifiOff, X } from 'lucide-react';
+import { ArrowLeft, AudioLines, Check, ChevronDown, Copy, Keyboard, Link2, Mic, MicOff, Radio, RefreshCw, RotateCw, Send, ShieldCheck, Wifi, WifiOff, X } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, ERROR_LABELS, LANGUAGES, newClientId } from '../api';
 import { MicrophoneCapture } from '../audio';
@@ -50,35 +50,39 @@ function ConversationPanel({ side, room, messages, partials, onSend, onRetry, on
   const language = side === 'A' ? room.language_a : room.language_b;
   const scroll = useRef(null);
   const lastSequence = useRef(null);
+  const lastPartialOrder = useRef(0);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [historyError, setHistoryError] = useState('');
-  const nearBottom = useRef(true);
-  const count = messages.length;
   const last = messages.at(-1);
-  useEffect(() => {
+  const livePartials = Object.values(partials).sort((a, b) => b.receivedOrder - a.receivedOrder);
+  const newestPartialOrder = livePartials[0]?.receivedOrder ?? 0;
+  const activeSpeaker = listening && side === room.side;
+  useLayoutEffect(() => {
     const element = scroll.current;
-    if (element && (nearBottom.current || lastSequence.current === null)) element.scrollTop = element.scrollHeight;
-    lastSequence.current = last?.sequence ?? null;
-  }, [count, last?.id, last?.version, partials]);
+    const sequence = last?.sequence ?? 0;
+    if (element && (lastSequence.current === null || sequence > lastSequence.current || newestPartialOrder > lastPartialOrder.current)) {
+      element.scrollTop = 0;
+    }
+    lastSequence.current = sequence;
+    lastPartialOrder.current = Math.max(lastPartialOrder.current, newestPartialOrder);
+  }, [last?.sequence, newestPartialOrder]);
   const older = async () => {
     if (loadingOlder) return;
-    setLoadingOlder(true); setHistoryError('');
-    const previousHeight = scroll.current.scrollHeight;
-    const previousTop = scroll.current.scrollTop;
+    setLoadingOlder(true);
+    setHistoryError('');
     try {
       await loadOlder();
-      requestAnimationFrame(() => { if (scroll.current) scroll.current.scrollTop = previousTop + scroll.current.scrollHeight - previousHeight; });
     } catch (err) { setHistoryError(err.message); }
     finally { setLoadingOlder(false); }
   };
-  return <section className={`conversation-panel panel-${side.toLowerCase()} ${rotated ? 'rotated' : ''} ${shared ? '' : 'remote-panel'}`} aria-label={`Màn hình người ${side}`}>
-    <div className="panel-heading"><div className="panel-person"><span className="person-badge">{side}</span><div><h2>{LANGUAGES[language].name}</h2><span>{shared ? `NGƯỜI ${side}` : `${room.members.find(member => member.side === side)?.username || `Người ${side}`} · BẠN`}</span></div></div><span className="panel-language-tag">{LANGUAGES[language].short}</span>{listening && <span className="panel-live"><Radio size={13} /> LIVE</span>}</div>
-    <div className="conversation-feed" ref={scroll} role="log" aria-label={`Hội thoại người ${side}`} onScroll={() => { const el = scroll.current; nearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}>
-      {hasMore && <button className="load-older" onClick={older} disabled={loadingOlder}><ChevronUp size={14} />{loadingOlder ? 'Đang tải…' : 'Xem hội thoại trước'}</button>}
-      {historyError && <p className="composer-error">{historyError}</p>}
+  return <section className={`conversation-panel panel-${side.toLowerCase()} ${rotated ? 'rotated' : ''} ${shared ? '' : 'remote-panel'} ${activeSpeaker ? 'capturing' : ''}`} aria-label={`Màn hình người ${side}`}>
+    <div className="panel-heading"><div className="panel-person"><span className="person-badge">{side}</span><div><h2>{LANGUAGES[language].name}</h2><span>{shared ? `NGƯỜI ${side}${side === room.side ? ' · BẠN' : ''}` : `${room.members.find(member => member.side === side)?.username || `Người ${side}`} · BẠN`}</span></div></div><span className="panel-language-tag">{LANGUAGES[language].short}</span>{activeSpeaker && <span className="panel-live"><Radio size={13} /> LIVE</span>}</div>
+    <div className="conversation-feed" ref={scroll} role="log" aria-label={`Hội thoại người ${side}`}>
       {!messages.length && !Object.keys(partials).length && <EmptyConversation language={language} compact={shared} />}
-      {messages.map(message => <Message key={message.id} message={message} language={language} room={room} onRetry={onRetry} onAssign={onAssign} />)}
-      {Object.values(partials).map(partial => <div className="partial-message" key={partial.segment_id}><span><AudioLines size={13} /> Đang nghe{partial.speaker ? ` người ${partial.speaker}` : ''}…</span><p>{partial.text}</p></div>)}
+      {livePartials.map(partial => <div className="partial-message" key={partial.segment_id}><span><AudioLines size={13} /> Đang nghe{partial.speaker ? ` người ${partial.speaker}` : ''}…</span><p>{partial.text}</p></div>)}
+      {[...messages].reverse().map(message => <Message key={message.id} message={message} language={language} room={room} onRetry={onRetry} onAssign={onAssign} />)}
+      {historyError && <p className="composer-error">{historyError}</p>}
+      {hasMore && <button className="load-older" onClick={older} disabled={loadingOlder}><ChevronDown size={14} />{loadingOlder ? 'Đang tải…' : 'Xem hội thoại trước'}</button>}
     </div>
     <Composer side={side} language={language} onSend={onSend} />
   </section>;
@@ -140,15 +144,15 @@ export function RoomPage() {
     let disposed = false, timer;
     const load = async () => {
       try {
-        const value = await api('/config');
+        const value = await api(`/config?room_id=${encodeURIComponent(roomId)}`);
         if (disposed) return;
         setConfig(value);
-        if (value.speech === 'loading') timer = setTimeout(load, 3000);
+        timer = setTimeout(load, value.speech === 'loading' ? 3000 : 10000);
       } catch { if (!disposed) timer = setTimeout(load, 5000); }
     };
     load();
     return () => { disposed = true; clearTimeout(timer); };
-  }, [connection]);
+  }, [connection, roomId]);
 
   useEffect(() => {
     const hidden = () => {
@@ -193,17 +197,19 @@ export function RoomPage() {
   const connected = connection === 'connected';
   const listening = mic === 'listening';
   const canSpeak = config?.speech === 'ready' && connected;
+  const spokenLanguage = LANGUAGES[room.side === 'A' ? room.language_a : room.language_b].name;
   const panelProps = { room, messages: state.messages, partials: state.partials, onSend, onRetry: retry, onAssign: assign, hasMore: state.hasMore, loadOlder: state.loadOlder, shared, listening };
   return <main className={`room-page ${shared ? 'shared-room' : 'remote-room'}`}>
     <header className="room-header"><Link to="/" className="icon-btn room-back" aria-label="Về danh sách hội thoại"><ArrowLeft size={21} /></Link><div className="room-title"><h1>{room.title}</h1><span>{LANGUAGES[room.language_a].name} <span className="pair-arrow">↔</span> {LANGUAGES[room.language_b].name}<i />{shared ? 'Một máy chung' : `Bạn là người ${room.side}`}</span></div><div className={`connection-pill ${connected ? '' : 'offline'}`} role="status">{connected ? <><span />Đã kết nối</> : <><WifiOff size={13} />Đang kết nối lại</>}</div>{shared ? <button className={`icon-btn rotate-button ${rotated ? 'active' : ''}`} aria-label="Xoay màn hình người A 180 độ" aria-pressed={rotated} title="Xoay phía A để ngồi đối diện" onClick={() => setRotated(!rotated)}><RotateCw size={19} /></button> : room.side === 'A' && room.members.length < 2 ? <button className="btn btn-small btn-secondary" aria-label="Mời bạn" onClick={share} disabled={invite?.loading}><Link2 size={16} /><span>Mời bạn</span></button> : <span className="member-count">2 người</span>}</header>
     {!connected && <div className="room-banner"><Wifi size={15} /> Kết nối đang gián đoạn. Micro đã dừng; hội thoại sẽ tự đồng bộ khi kết nối lại.</div>}
-    {config && !config.translation_configured && <div className="room-banner warning">Dịch thuật chưa sẵn sàng. Bạn vẫn có thể nhập và lưu nguyên văn.</div>}
+    <div className="room-banner translation-owner">Dịch bằng cấu hình của chủ phòng. {config?.translation_is_owner && <Link to={`/settings/translation?room=${encodeURIComponent(roomId)}`}>Cài đặt dịch thuật</Link>}</div>
+    {config && !config.translation_configured && <div className="room-banner warning">{config.translation_is_owner ? <>Bạn chưa cấu hình dịch thuật. <Link to={`/settings/translation?room=${encodeURIComponent(roomId)}`}>Thiết lập API của bạn</Link> rồi bấm Thử lại ở câu chưa dịch.</> : 'Chủ phòng chưa cấu hình dịch thuật. Hãy liên hệ chủ phòng để thiết lập API.'} Bạn vẫn có thể nhập và lưu nguyên văn.</div>}
     {!shared && room.members.length < 2 && <div className="room-banner waiting"><span className="status-dot" />Đang chờ người còn lại. Gửi lời mời để cùng trò chuyện.</div>}
     <div className={`panels-layout ${shared ? 'two-panels' : 'one-panel'}`}>
       {shared ? <><ConversationPanel {...panelProps} side="A" rotated={rotated} /><div className="panel-divider"><span><AudioLines size={16} /></span></div><ConversationPanel {...panelProps} side="B" /></> : <ConversationPanel {...panelProps} side={room.side} />}
     </div>
     {notice && <div className="room-notice" role="alert"><span>{notice}</span><button className="icon-btn" aria-label="Đóng thông báo" onClick={() => setNotice('')}><X size={16} /></button></div>}
-    <footer className="room-controls"><div className="microphone-explanation"><ShieldCheck size={17} /><span>{shared ? 'Hai người nói lần lượt' : 'Chỉ thu giọng nói của bạn'}<small>Âm thanh không được lưu</small></span></div><button className={`mic-button ${listening ? 'listening' : ''}`} disabled={(mic === 'idle' && !canSpeak) || mic === 'starting' || mic === 'stopping'} onClick={listening ? () => stopMicrophone() : startMicrophone}>{mic === 'starting' || mic === 'stopping' ? <span className="spinner" /> : listening ? <MicOff size={21} /> : <Mic size={21} />}<span>{mic === 'starting' ? 'Đang mở micro…' : mic === 'stopping' ? 'Đang chốt đoạn nói…' : listening ? 'Dừng micro' : 'Bắt đầu nghe'}</span>{listening && <span className="live-wave"><i /><i /><i /><i /></span>}</button><div className="microphone-hint">{listening ? <><span className="status-dot" /> Đang nghe liên tục</> : config?.speech === 'loading' ? <><span className="spinner" /> Đang chuẩn bị nhận giọng nói</> : config?.speech === 'error' || config?.speech === 'disabled' ? 'Nhập chữ để tiếp tục trò chuyện' : 'Bấm micro rồi nói tự nhiên'}</div></footer>
+    <footer className="room-controls"><div className="microphone-explanation microphone-identity"><ShieldCheck size={17} /><span>Bạn là {room.side} · {spokenLanguage}<small>Hãy nói {spokenLanguage} · Tự động dịch</small></span></div><button className={`mic-button ${listening ? 'listening' : ''}`} disabled={(mic === 'idle' && !canSpeak) || mic === 'starting' || mic === 'stopping'} onClick={listening ? () => stopMicrophone() : startMicrophone}>{mic === 'starting' || mic === 'stopping' ? <span className="spinner" /> : listening ? <MicOff size={21} /> : <Mic size={21} />}<span>{mic === 'starting' ? 'Đang mở micro…' : mic === 'stopping' ? 'Đang chốt đoạn nói…' : listening ? 'Dừng micro' : 'Bắt đầu nghe'}</span>{listening && <span className="live-wave"><i /><i /><i /><i /></span>}</button><div className="microphone-hint">{listening ? <><span className="status-dot" /> Đang nghe liên tục</> : config?.speech === 'loading' ? <><span className="spinner" /> Đang chuẩn bị nhận giọng nói</> : config?.speech === 'error' || config?.speech === 'disabled' ? 'Nhập chữ để tiếp tục trò chuyện' : 'Bấm micro rồi nói tự nhiên'}</div></footer>
     {invite && <InviteModal invite={invite} onClose={closeInvite} />}
   </main>;
 }

@@ -24,7 +24,7 @@ function CreateRoom({ onClose }) {
     <p className="muted modal-intro">Chọn cách kết nối. Phần ngôn ngữ cứ để Song Ngữ.</p>
     <form onSubmit={submit}>
       <fieldset className="mode-options"><legend className="field-label">Hai bạn sẽ dùng thiết bị thế nào?</legend>
-        {[['shared', Smartphone, 'Một máy chung', 'Ngồi đối diện, cùng xem'], ['remote', UsersRound, 'Hai máy riêng', 'Kết nối qua liên kết hoặc QR']].map(([value, Icon, title, description]) =>
+        {[['shared', Smartphone, 'Một máy chung', 'Cùng xem một màn hình'], ['remote', UsersRound, 'Hai máy riêng', 'Kết nối qua liên kết hoặc QR']].map(([value, Icon, title, description]) =>
           <label key={value} className={`mode-option ${mode === value ? 'selected' : ''}`}><input type="radio" name="mode" value={value} checked={mode === value} onChange={() => setMode(value)} /><Icon size={23} /><strong>{title}</strong><small>{description}</small><span className="radio-indicator" /></label>)}
       </fieldset>
       <label className="field-label" htmlFor="room-title">Tên hội thoại <small>Không bắt buộc</small></label>
@@ -37,7 +37,7 @@ function CreateRoom({ onClose }) {
       {a === b && <p className="form-error">Hãy chọn hai ngôn ngữ khác nhau.</p>}
       {error && <p role="alert" className="form-error">{error}</p>}
       <button className="btn btn-primary full-width" disabled={busy || a === b}>{busy ? <span className="spinner" /> : <>Bắt đầu trò chuyện <ArrowRight size={18} /></>}</button>
-      <p className="form-footnote">Có thể dùng micro hoặc nhập chữ trong phòng.</p>
+      <p className="form-footnote">Bấm Bắt đầu nghe trong phòng để dịch giọng nói.</p>
     </form>
   </Modal>;
 }
@@ -85,7 +85,7 @@ export function Dashboard() {
       <section className="welcome-section">
         <div className="welcome-copy"><span className="eyebrow"><span className="status-dot" /> KHÔNG CÒN RÀO CẢN NGÔN NGỮ</span>
           <h1>Hiểu nhau,<br /><em>ngay lúc này.</em></h1>
-          <p>Xin chào {user.username}. Mỗi người một ngôn ngữ,<br className="desktop-break" /> cùng chia sẻ một câu chuyện.</p>
+          <p>Xin chào {user.name || user.username}. Mỗi người một ngôn ngữ,<br className="desktop-break" /> cùng chia sẻ một câu chuyện.</p>
           <div className="welcome-actions"><button className="btn btn-primary" onClick={() => setModal({ type: 'create' })}><Plus size={19} /> Tạo cuộc trò chuyện</button><button className="btn btn-secondary" onClick={() => setModal({ type: 'join' })}><Link2 size={18} /> Tham gia phòng</button></div>
         </div>
         <div className="welcome-art" aria-hidden="true"><div className="art-orbit" /><span className="art-language art-lang-top">你好</span><span className="art-language art-lang-bottom">안녕하세요</span><div className="art-card art-card-a"><span className="art-avatar">A</span><div><small>TIẾNG VIỆT</small><strong>Chào bạn, mình là An.</strong></div><span className="art-dot" /></div><div className="art-bridge"><AudioLines size={27} /></div><div className="art-card art-card-b"><span className="art-avatar">B</span><div><small>ENGLISH</small><strong>Hi, I'm An. Nice to meet you.</strong></div></div><span className="art-caption"><span /> HIỂU NHAU TRONG TỪNG CÂU NÓI</span></div>

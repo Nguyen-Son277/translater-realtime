@@ -8,11 +8,11 @@ import numpy as np
 from faster_whisper.audio import decode_audio
 
 from app.config import LANGUAGES, Settings
-from app.speech import WhisperRecognizer
+from app.speech import create_recognizer
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Kiểm tra faster-whisper bằng file âm thanh")
+    parser = argparse.ArgumentParser(description="Kiểm tra model speech-to-text bằng file âm thanh")
     parser.add_argument("file")
     parser.add_argument("--language", default="auto", choices=["auto", *LANGUAGES])
     parser.add_argument("--seconds", type=float, default=6,
@@ -24,8 +24,12 @@ def main():
         parser.error("--seconds phải trong (0, 10]; --repeat phải trong [1, 20]")
     settings = Settings()
     settings.prepare_directories()
-    recognizer = WhisperRecognizer(settings)
-    print(f"Đang tải model {settings.whisper_model} ({settings.whisper_device})…", flush=True)
+    recognizer = create_recognizer(settings)
+    model_name = (settings.speech_model if settings.speech_backend == "nemotron"
+                  else settings.whisper_model)
+    device = (settings.speech_device if settings.speech_backend == "nemotron"
+              else settings.whisper_device)
+    print(f"Đang tải model {model_name} ({device})…", flush=True)
     recognizer.model = recognizer.load_sync()
     audio = decode_audio(args.file, sampling_rate=16000)[:int(16000 * args.seconds)]
     if not len(audio):
@@ -36,7 +40,7 @@ def main():
         started = time.monotonic()
         result = recognizer.transcribe_sync(pcm, None if args.language == "auto" else args.language)
         durations.append(time.monotonic() - started)
-    print(json.dumps({"model": settings.whisper_model,
+    print(json.dumps({"backend": settings.speech_backend, "model": model_name,
                       "text": result.text, "language": result.language,
                       "confidence": round(result.confidence, 3),
                       "audio_seconds": len(audio) / 16000,

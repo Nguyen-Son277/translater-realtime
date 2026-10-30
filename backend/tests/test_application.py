@@ -33,7 +33,10 @@ def test_authentication_password_hash_and_cookie(system, actor):
         assert user.password_hash.startswith("$argon2id$")
         assert db.get(Session, digest_token(owner.token))
         assert db.get(Session, owner.token) is None
-    assert client.post("/api/auth/register", json={"username": "alice", "password": "correct-password"}).status_code == 409
+    assert client.post("/api/auth/register", json={
+        "username": "alice", "name": "Alice", "email": "alice@example.com",
+        "password": "correct-password", "password_confirmation": "correct-password",
+    }).status_code == 409
     assert client.post("/api/auth/login", json={"username": "alice", "password": "wrong-password"}).status_code == 401
     response = client.post("/api/auth/login", json={"username": "alice", "password": "correct-password"})
     assert response.status_code == 200

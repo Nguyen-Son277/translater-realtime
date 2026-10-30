@@ -1,9 +1,24 @@
 import re
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from app.config import LANGUAGES
+
+
+def normalize_email(value):
+    return value.strip().lower() if isinstance(value, str) else value
+
+
+EmailAddress = Annotated[EmailStr, BeforeValidator(normalize_email), Field(max_length=254)]
 
 
 class Credentials(BaseModel):
@@ -17,6 +32,32 @@ class Credentials(BaseModel):
         if not re.fullmatch(r"[a-z0-9_.-]{3,32}", value):
             raise ValueError("Tên đăng nhập gồm 3–32 chữ cái, số, dấu chấm, gạch dưới hoặc gạch ngang.")
         return value
+
+
+class Registration(Credentials):
+    name: str = Field(min_length=1, max_length=100)
+    email: EmailAddress
+    password_confirmation: str = Field(min_length=8, max_length=128)
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value):
+        value = value.strip()
+        if not value:
+            raise ValueError("Vui lòng nhập tên của bạn.")
+        return value
+
+    @model_validator(mode="after")
+    def matching_passwords(self):
+        if self.password != self.password_confirmation:
+            raise ValueError("Mật khẩu nhập lại chưa khớp.")
+        return self
+
+
+class EmailUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: EmailAddress
 
 
 class RoomCreate(BaseModel):

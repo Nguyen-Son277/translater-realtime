@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.config import Settings
+from app.nemotron import NemotronRecognizer
 from app.speech import AudioPiece, AudioSegmenter, AudioStream, Transcript, WhisperRecognizer
 from tests.fakes import FakeRecognizer
 
@@ -77,7 +78,8 @@ async def test_speaker_assignment_and_final_transcription(mode, language, confid
     stream.offer(AudioPiece("final", "segment-1", VOICE * 50))
     await stream.stop(flush=False)
     assert finals == [("segment-1", "Xin chào", expected)]
-    assert recognizer.calls[0][1] == ("en" if mode == "remote" else None)
+    expected_language = "en" if mode == "remote" else ("vi", "en")
+    assert recognizer.calls[0][1] == expected_language
     assert sent[-1]["text"] == ""
 
 
@@ -132,9 +134,12 @@ async def test_busy_capture_discards_preview_backlog_but_preserves_finals():
     assert all(not payload["text"] for payload in sent)
 
 
+@pytest.mark.parametrize("recognizer_class", [WhisperRecognizer, NemotronRecognizer])
 @pytest.mark.parametrize("cancel_first", [False, True])
-async def test_busy_cpu_drops_previews_and_keeps_final_inference_serial(monkeypatch, cancel_first):
-    recognizer = WhisperRecognizer(Settings(_env_file=None))
+async def test_busy_cpu_drops_previews_and_keeps_final_inference_serial(
+    monkeypatch, cancel_first, recognizer_class,
+):
+    recognizer = recognizer_class(Settings(_env_file=None))
     recognizer.state = "ready"
     started, release = asyncio.Event(), threading.Event()
     loop = asyncio.get_running_loop()
@@ -170,3 +175,31 @@ async def test_busy_cpu_drops_previews_and_keeps_final_inference_serial(monkeypa
     assert (await second).text == "second final"
     assert calls == [b"first final", b"second final"]
     assert (await recognizer.transcribe_preview(b"fresh preview", "vi")).text == "fresh preview"
+
+
+def test_whisper_restricts_shared_room_detection_to_selected_languages():
+    class Segment:
+        text = "Xin chào"
+
+    class Model:
+        def __init__(self):
+            self.detected = []
+            self.transcribed = []
+
+        def detect_language(self, audio, language_detection_segments):
+            self.detected.append((audio, language_detection_segments))
+            return "ja", .91, [("ja", .91), ("zh", .04), ("vi", .03), ("en", .02)]
+
+        def transcribe(self, audio, **kwargs):
+            self.transcribed.append((audio, kwargs))
+            return iter([Segment()]), type("Info", (), {
+                "language": kwargs["language"], "language_probability": 1.0,
+            })()
+
+    recognizer = WhisperRecognizer(Settings(_env_file=None))
+    recognizer.model = Model()
+    result = recognizer.transcribe_sync(b"\x01\x00" * 320, ("vi", "zh"))
+    assert result.text == "Xin chào"
+    assert result.language == "zh"
+    assert result.confidence == .04
+    assert recognizer.model.transcribed[0][1]["language"] == "zh"

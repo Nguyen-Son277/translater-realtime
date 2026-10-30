@@ -18,7 +18,9 @@ class Transcript:
     confidence: float
 
 
-class WhisperRecognizer:
+class SpeechRecognizer:
+    """Serialize model inference without blocking the WebSocket event loop."""
+
     def __init__(self, settings):
         self.settings = settings
         self.state = "loading" if settings.speech_enabled else "disabled"
@@ -33,8 +35,7 @@ class WhisperRecognizer:
     async def load(self):
         try:
             self.model = await asyncio.to_thread(self.load_sync)
-            # Prepare CTranslate2's first inference before accepting captures.
-            # Otherwise the first person's caption also pays this startup cost.
+            # Warm up inference before accepting microphone captures.
             await asyncio.to_thread(self.transcribe_sync, b"\x00" * 32000, "en")
             self.state = "ready"
         except Exception:
@@ -42,32 +43,19 @@ class WhisperRecognizer:
             logger.exception("Speech model could not be loaded")
 
     def load_sync(self):
-        from faster_whisper import WhisperModel
+        raise NotImplementedError
 
-        return WhisperModel(
-            self.settings.whisper_model, device=self.settings.whisper_device,
-            compute_type=self.settings.whisper_compute_type,
-            cpu_threads=self.settings.whisper_cpu_threads,
-            download_root=self.settings.whisper_download_root,
-        )
+    def transcribe_sync(self, pcm, language):
+        raise NotImplementedError
 
-    def transcribe_sync(self, pcm: bytes, language: str | None) -> Transcript:
-        audio = np.frombuffer(pcm, dtype="<i2").astype(np.float32) / 32768.0
-        segments, info = self.model.transcribe(
-            audio, language=language, beam_size=1, best_of=1, temperature=0,
-            condition_on_previous_text=False, vad_filter=False,
-            without_timestamps=True,
-        )
-        text = " ".join(segment.text.strip() for segment in segments).strip()
-        return Transcript(text[:4000], info.language, info.language_probability)
-
-    async def transcribe(self, pcm: bytes, language: str | None) -> Transcript:
+    async def transcribe(self, pcm: bytes, language: str | tuple[str, ...] | None) -> Transcript:
         if self.state != "ready":
             raise RuntimeError("speech_unavailable")
         async with self.semaphore:
             return await self.infer(pcm, language)
 
-    async def transcribe_preview(self, pcm: bytes, language: str | None) -> Transcript | None:
+    async def transcribe_preview(self, pcm: bytes,
+                                 language: str | tuple[str, ...] | None) -> Transcript | None:
         # Previews never wait for the shared CPU. A final from either phone
         # must not queue behind a disposable preview from the other phone.
         if self.semaphore.locked():
@@ -79,14 +67,60 @@ class WhisperRecognizer:
         try:
             return await asyncio.shield(task)
         except asyncio.CancelledError:
-            # Cancelling to_thread does not stop CTranslate2. Keep the inference
-            # slot until the CPU actually finishes, including during shutdown.
+            # Cancelling to_thread does not stop model inference. Keep the slot
+            # until the inference actually finishes, including during shutdown.
             await task
             raise
 
     async def close(self):
         if self.initializing:
             await asyncio.gather(self.initializing, return_exceptions=True)
+
+
+class WhisperRecognizer(SpeechRecognizer):
+    def load_sync(self):
+        from faster_whisper import WhisperModel
+
+        return WhisperModel(
+            self.settings.whisper_model, device=self.settings.whisper_device,
+            compute_type=self.settings.whisper_compute_type,
+            cpu_threads=self.settings.whisper_cpu_threads,
+            download_root=self.settings.whisper_download_root,
+        )
+
+    def transcribe_sync(self, pcm: bytes, language: str | tuple[str, ...] | None) -> Transcript:
+        audio = np.frombuffer(pcm, dtype="<i2").astype(np.float32) / 32768.0
+        detected_probability = None
+        if isinstance(language, (tuple, list)):
+            allowed = tuple(dict.fromkeys(language))
+            if len(allowed) == 1:
+                language = allowed[0]
+            elif allowed:
+                _, _, all_language_probs = self.model.detect_language(
+                    audio, language_detection_segments=1,
+                )
+                probabilities = dict(all_language_probs or [])
+                language = max(allowed, key=lambda candidate: probabilities.get(candidate, 0.0))
+                detected_probability = probabilities.get(language, 0.0)
+            else:
+                language = None
+        segments, info = self.model.transcribe(
+            audio, language=language, beam_size=1, best_of=1, temperature=0,
+            condition_on_previous_text=False, vad_filter=False,
+            without_timestamps=True,
+        )
+        text = " ".join(segment.text.strip() for segment in segments).strip()
+        return Transcript(text[:4000], info.language,
+                          detected_probability if detected_probability is not None
+                          else info.language_probability)
+
+
+def create_recognizer(settings):
+    if settings.speech_backend == "whisper":
+        return WhisperRecognizer(settings)
+    from app.nemotron import NemotronRecognizer
+
+    return NemotronRecognizer(settings)
 
 
 @dataclass
@@ -227,9 +261,13 @@ class AudioStream:
             else:
                 self.wake.clear()
                 continue
-            language = None
             if self.room.mode == "remote":
                 language = self.room.language_a if self.connection.side == "A" else self.room.language_b
+            else:
+                # Shared microphones may contain either room language. The
+                # recognizer uses this pair to constrain or validate detection;
+                # unrecognized languages must not be assigned to either speaker.
+                language = (self.room.language_a, self.room.language_b)
             started = time.monotonic()
             self.processing = True
             try:

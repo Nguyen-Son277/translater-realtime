@@ -7,7 +7,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 ca-cer
     && useradd --create-home --uid 10001 app \
     && mkdir -p /data /models && chown app:app /data /models
 COPY requirements.txt requirements.lock ./
-RUN pip install -r requirements.lock
+# Keep the default image CPU-only rather than pulling CUDA runtime wheels.
+RUN pip install --index-url https://download.pytorch.org/whl/cpu torch==2.15.0 \
+    && pip install -r requirements.lock
 COPY --chown=app:app app ./app
 COPY --chown=app:app migrations ./migrations
 COPY --chown=app:app scripts ./scripts

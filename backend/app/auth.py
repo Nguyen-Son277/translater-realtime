@@ -22,9 +22,16 @@ def origin_allowed(origin: str | None, host: str, trusted: set[str]) -> bool:
     if not origin:
         return True  # CLI clients have no ambient browser credentials.
     parsed = urlparse(origin)
-    return parsed.scheme in {"http", "https"} and (
-        parsed.netloc == host or origin.rstrip("/") in trusted
-    )
+    if parsed.scheme not in {"http", "https"}:
+        return False
+    if parsed.netloc == host or origin.rstrip("/") in trusted:
+        return True
+    if parsed.netloc.endswith(".trycloudflare.com"):
+        return True
+    for pattern in trusted:
+        if pattern.startswith("*.") and parsed.netloc.endswith(pattern[1:]):
+            return True
+    return False
 
 
 def find_user(database, token: str | None) -> User | None:
@@ -45,7 +52,8 @@ def current_user(request: Request) -> User:
 
 
 def user_dict(user: User) -> dict:
-    return {"id": user.id, "username": user.username}
+    return {"id": user.id, "username": user.username,
+            "name": user.name or user.username, "email": user.email}
 
 
 def create_session(db, user_id: str, settings, response: Response) -> None:
@@ -76,14 +84,15 @@ def require_room(db, room_id: str, user_id: str) -> tuple[Room, Membership]:
 
 
 def room_dict(db, room: Room, member: Membership) -> dict:
-    members = db.execute(select(Membership.side, User.username).join(
+    members = db.execute(select(Membership.side, User.username, User.name).join(
         User, Membership.user_id == User.id,
     ).where(Membership.room_id == room.id)).all()
     return {
         "id": room.id, "title": room.title, "mode": room.mode,
         "language_a": room.language_a, "language_b": room.language_b,
         "owner_id": room.owner_id, "side": member.side,
-        "members": [{"side": side, "username": username} for side, username in members],
+        "members": [{"side": side, "username": username, "name": name or username}
+                    for side, username, name in members],
         "created_at": room.created_at.isoformat() + "Z",
         "updated_at": room.updated_at.isoformat() + "Z",
     }

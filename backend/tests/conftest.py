@@ -23,6 +23,9 @@ class Actor:
     def post(self, path, **kwargs):
         return self.client.post(path, headers=self.headers, **kwargs)
 
+    def patch(self, path, **kwargs):
+        return self.client.patch(path, headers=self.headers, **kwargs)
+
     def delete(self, path, **kwargs):
         return self.client.delete(path, headers=self.headers, **kwargs)
 
@@ -45,7 +48,10 @@ def actor(system):
     client, *_ = system
 
     def register(username):
-        response = client.post("/api/auth/register", json={"username": username, "password": "correct-password"})
+        response = client.post("/api/auth/register", json={
+            "username": username, "name": username, "email": f"{username}@example.com",
+            "password": "correct-password", "password_confirmation": "correct-password",
+        })
         assert response.status_code == 201, response.text
         return Actor(client, response.json(), client.cookies.get(COOKIE_NAME))
     return register

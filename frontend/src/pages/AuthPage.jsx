@@ -9,6 +9,7 @@ export function AuthPage() {
   const { user, setUser, loading } = useAuth();
   const [register, setRegister] = useState(false);
   const [visible, setVisible] = useState(false);
+  const [confirmationVisible, setConfirmationVisible] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const location = useLocation();
@@ -16,11 +17,21 @@ export function AuthPage() {
   const from = location.state?.from?.startsWith('/') && !location.state.from.startsWith('//') ? location.state.from : '/';
   if (!loading && user) return <Navigate to={from} replace />;
   const submit = async event => {
-    event.preventDefault(); setError(''); setBusy(true);
+    event.preventDefault(); setError('');
     const form = new FormData(event.currentTarget);
+    if (register && form.get('password') !== form.get('password_confirmation')) {
+      setError('Mật khẩu nhập lại chưa khớp.');
+      return;
+    }
+    setBusy(true);
     try {
       const account = await api(`/auth/${register ? 'register' : 'login'}`, {
-        method: 'POST', body: { username: form.get('username'), password: form.get('password') },
+        method: 'POST', body: register
+          ? {
+              username: form.get('username'), name: form.get('name'), email: form.get('email'),
+              password: form.get('password'), password_confirmation: form.get('password_confirmation'),
+            }
+          : { username: form.get('username'), password: form.get('password') },
       });
       setUser(account); navigate(from, { replace: true });
     } catch (err) { setError(err.message); }
@@ -48,16 +59,28 @@ export function AuthPage() {
         <h2>{register ? 'Một khởi đầu mới.' : 'Tiếp nối câu chuyện.'}</h2>
         <p className="muted">{register ? 'Tạo tài khoản để bắt đầu và lưu lại hội thoại.' : 'Đăng nhập để bắt đầu trò chuyện theo cách của bạn.'}</p>
         <div className="auth-tabs" role="tablist" aria-label="Tài khoản">
-          <button role="tab" aria-selected={!register} className={!register ? 'active' : ''} onClick={() => { setRegister(false); setError(''); }}>Đăng nhập</button>
-          <button role="tab" aria-selected={register} className={register ? 'active' : ''} onClick={() => { setRegister(true); setError(''); }}>Tạo tài khoản</button>
+          <button role="tab" aria-selected={!register} className={!register ? 'active' : ''} disabled={busy} onClick={() => { setRegister(false); setError(''); }}>Đăng nhập</button>
+          <button role="tab" aria-selected={register} className={register ? 'active' : ''} disabled={busy} onClick={() => { setRegister(true); setError(''); }}>Tạo tài khoản</button>
         </div>
         <form onSubmit={submit}>
           <label className="field-label" htmlFor="username">Tên đăng nhập</label>
-          <input id="username" name="username" placeholder="Tên của bạn" autoComplete="username" required minLength={3} maxLength={32} pattern="[a-zA-Z0-9_.\-]{3,32}" spellCheck={false} autoCapitalize="none" />
+          <input id="username" name="username" placeholder="Tên đăng nhập của bạn" autoComplete="username" required minLength={3} maxLength={32} pattern="[a-zA-Z0-9_.\-]{3,32}" spellCheck={false} autoCapitalize="none" />
+          {register && <>
+            <label className="field-label" htmlFor="name">Họ và tên</label>
+            <input id="name" name="name" placeholder="Tên bạn muốn hiển thị" autoComplete="name" required minLength={1} maxLength={100} />
+            <label className="field-label" htmlFor="email">Email</label>
+            <input id="email" name="email" type="email" placeholder="ban@example.com" autoComplete="email" required maxLength={254} />
+          </>}
           <label className="field-label" htmlFor="password">Mật khẩu <small>Ít nhất 8 ký tự</small></label>
           <div className="password-input"><input id="password" name="password" type={visible ? 'text' : 'password'} autoComplete={register ? 'new-password' : 'current-password'} placeholder="Nhập mật khẩu" minLength={8} maxLength={128} required />
             <button className="icon-btn" type="button" onClick={() => setVisible(!visible)} aria-label={visible ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}>{visible ? <EyeOff size={18} /> : <Eye size={18} />}</button>
           </div>
+          {register && <>
+            <label className="field-label" htmlFor="password_confirmation">Nhập lại mật khẩu</label>
+            <div className="password-input"><input id="password_confirmation" name="password_confirmation" type={confirmationVisible ? 'text' : 'password'} autoComplete="new-password" placeholder="Nhập lại mật khẩu" minLength={8} maxLength={128} required />
+              <button className="icon-btn" type="button" onClick={() => setConfirmationVisible(!confirmationVisible)} aria-label={confirmationVisible ? 'Ẩn mật khẩu nhập lại' : 'Hiện mật khẩu nhập lại'}>{confirmationVisible ? <EyeOff size={18} /> : <Eye size={18} />}</button>
+            </div>
+          </>}
           {error && <p className="form-error" role="alert">{error}</p>}
           <button className="btn btn-primary auth-submit" disabled={busy || loading}>{busy ? <span className="spinner" /> : <>{register ? 'Tạo tài khoản' : 'Đăng nhập'}<ArrowRight size={18} /></>}</button>
         </form>

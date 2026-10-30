@@ -28,8 +28,8 @@ export class MicrophoneCapture {
       this.media.getAudioTracks().forEach(track => { track.onended = onEnded; });
     } catch (error) {
       await this.stop();
-      if (error.name === 'NotAllowedError') throw new Error('Bạn chưa cho phép dùng micro. Hãy cấp quyền trong trình duyệt hoặc nhập chữ.');
-      if (error.name === 'NotFoundError') throw new Error('Không tìm thấy micro. Bạn có thể nhập chữ để trò chuyện.');
+      if (error.name === 'NotAllowedError') throw new Error('Bạn chưa cho phép dùng micro. Hãy cấp quyền micro trong trình duyệt, rồi bấm Bắt đầu nghe để thử lại.');
+      if (error.name === 'NotFoundError') throw new Error('Không tìm thấy micro. Hãy kết nối micro, rồi bấm Bắt đầu nghe để thử lại.');
       throw error;
     }
   }

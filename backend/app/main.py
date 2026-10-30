@@ -40,9 +40,17 @@ from app.config import LANGUAGES, Settings
 from app.db import Database
 from app.hub import Connection, Hub
 from app.models import Membership, Message, Room, Session, User, utcnow
-from app.schemas import AssignSpeaker, Credentials, JoinRoom, RoomCreate, TextMessage
+from app.schemas import (
+    AssignSpeaker,
+    Credentials,
+    EmailUpdate,
+    JoinRoom,
+    Registration,
+    RoomCreate,
+    TextMessage,
+)
 from app.services import MessageService
-from app.speech import AudioStream, WhisperRecognizer
+from app.speech import AudioStream, create_recognizer
 from app.translation import LocalTranslator, TranslationJobs
 
 logger = logging.getLogger(__name__)
@@ -54,7 +62,7 @@ def create_app(settings=None, recognizer=None, translator=None):
     settings.prepare_directories()
     database = Database(settings.database_url)
     hub = Hub()
-    recognizer = recognizer or WhisperRecognizer(settings)
+    recognizer = recognizer or create_recognizer(settings)
     translator = translator or LocalTranslator(settings)
     jobs = TranslationJobs(database, hub, translator, settings)
     messages = MessageService(database, hub, jobs)
@@ -128,18 +136,18 @@ def create_app(settings=None, recognizer=None, translator=None):
                 "translation_configured": translator.configured}
 
     @app.post("/api/auth/register", status_code=201)
-    async def register(body: Credentials, request: Request, response: Response):
+    async def register(body: Registration, request: Request, response: Response):
         auth_rate_limit(request)
         hashed = await asyncio.to_thread(passwords.hash, body.password)
         with database.session() as db:
-            user = User(username=body.username, password_hash=hashed)
+            user = User(username=body.username, name=body.name, email=body.email, password_hash=hashed)
             db.add(user)
             try:
                 db.flush()
                 create_session(db, user.id, settings, response)
                 db.commit()
             except IntegrityError as exc:
-                raise HTTPException(409, "Tên đăng nhập đã được sử dụng.") from exc
+                raise HTTPException(409, "Tên đăng nhập hoặc email đã được sử dụng.") from exc
             return user_dict(user)
 
     @app.post("/api/auth/login")
@@ -160,6 +168,19 @@ def create_app(settings=None, recognizer=None, translator=None):
     @app.get("/api/auth/me")
     def me(user=Depends(current_user)):
         return user_dict(user)
+
+    @app.patch("/api/auth/me")
+    def update_email(body: EmailUpdate, user=Depends(current_user)):
+        with database.session() as db:
+            account = db.get(User, user.id)
+            if account is None:
+                raise HTTPException(401, "Vui lòng đăng nhập để tiếp tục.")
+            account.email = body.email
+            try:
+                db.commit()
+            except IntegrityError as exc:
+                raise HTTPException(409, "Email đã được sử dụng.") from exc
+            return user_dict(account)
 
     @app.post("/api/auth/logout", status_code=204)
     async def logout(request: Request, response: Response):

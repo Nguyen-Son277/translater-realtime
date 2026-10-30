@@ -7,7 +7,10 @@ async function register(page) {
   await page.getByRole('tab', { name: 'Tạo tài khoản' }).click();
   const username = accountName();
   await page.getByLabel('Tên đăng nhập', { exact: true }).fill(username);
+  await page.getByLabel('Họ và tên', { exact: true }).fill(username);
+  await page.getByLabel('Email', { exact: true }).fill(`${username}@example.com`);
   await page.getByLabel('Mật khẩu', { exact: false }).first().fill('test-password-123');
+  await page.getByLabel('Nhập lại mật khẩu', { exact: true }).fill('test-password-123');
   await page.getByRole('button', { name: 'Tạo tài khoản', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Hiểu nhau, ngay lúc này.' })).toBeVisible();
   return username;
@@ -22,30 +25,45 @@ async function create(page, mode = 'shared') {
   await expect(page.getByRole('status')).toHaveText('Đã kết nối');
 }
 
-async function send(page, side, text) {
-  await page.getByRole('textbox', { name: `Tin nhắn người ${side}` }).fill(text);
-  await page.getByRole('button', { name: `Gửi tin nhắn người ${side}` }).click();
-  await expect(page.getByRole('textbox', { name: `Tin nhắn người ${side}` })).toHaveValue('');
+// API-seeded messages provide transcript fixtures without adding text input to the UI.
+async function seedTranscriptMessage(page, side, text) {
+  const roomId = new URL(page.url()).pathname.split('/').pop();
+  const response = await page.context().request.post(`/api/rooms/${roomId}/messages`, {
+    data: { text, speaker: side, client_message_id: crypto.randomUUID() },
+  });
+  if (!response.ok()) throw new Error(`message request failed: ${response.status()}`);
+  return response.json();
 }
 
-test('shared phone shows both languages on both sides and rotates A', async ({ page }) => {
+test('shared phone shows one voice transcript with larger translations', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await register(page);
-  await page.screenshot({ path: 'test-results/mobile-dashboard.png', fullPage: true });
   await create(page);
-  await send(page, 'A', 'Xin chào');
-  for (const side of ['A', 'B']) {
-    const panel = page.getByRole('log', { name: `Hội thoại người ${side}` });
-    await expect(panel.getByText('Xin chào', { exact: true })).toBeVisible();
-    await expect(panel.getByText('Hello', { exact: true })).toBeVisible();
+  await expect(page.getByRole('log')).toHaveCount(1);
+  await expect(page.locator('.conversation-panel')).toHaveCount(1);
+  await expect(page.getByRole('button', { name: /Xoay màn hình/ })).toHaveCount(0);
+  await seedTranscriptMessage(page, 'A', 'Xin chào');
+  const panel = page.getByRole('log', { name: 'Hội thoại chung' });
+  await expect(panel.getByText('Xin chào', { exact: true })).toBeVisible();
+  await expect(panel.getByText('Hello', { exact: true })).toBeVisible();
+  await seedTranscriptMessage(page, 'B', 'How are you?');
+  await expect(panel.getByText('Bạn khỏe không?', { exact: true })).toBeVisible();
+  await expect(page.locator('[data-message-id]')).toHaveCount(2);
+  for (const translation of await panel.locator('.message-translation').all()) {
+    await expect(translation).toHaveCSS('font-size', '28px');
   }
-  await send(page, 'B', 'How are you?');
-  await expect(page.getByText('Bạn khỏe không?', { exact: true })).toHaveCount(2);
-  await page.getByRole('button', { name: 'Xoay màn hình người A 180 độ' }).click();
-  await expect(page.getByRole('button', { name: 'Xoay màn hình người A 180 độ' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByRole('region', { name: 'Màn hình người A' })).toHaveCSS('transform', 'matrix(-1, 0, 0, -1, 0, 0)');
+  await expect(page.locator('textarea[aria-label^="Tin nhắn người "]')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Bắt đầu nghe', exact: true })).toBeVisible();
   await page.screenshot({ path: 'test-results/mobile-shared-room.png', fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  for (const translation of await panel.locator('.message-translation').all()) {
+    await expect(translation).toHaveCSS('font-size', '32px');
+  }
+  await expect(page.getByRole('log')).toHaveCount(1);
+  await expect(panel.locator('.message-text.preferred')).toHaveCSS('font-size', '24px');
+  await expect(page.getByRole('button', { name: 'Bắt đầu nghe', exact: true })).toHaveCSS('min-height', '56px');
+  await expect(page.locator('body')).toHaveCSS('font-size', '18px');
 });
 
 test('two signed-in phones join by invitation and exchange both directions', async ({ browser }) => {
@@ -59,18 +77,29 @@ test('two signed-in phones join by invitation and exchange both directions', asy
   await a.getByRole('button', { name: 'Đóng', exact: true }).click();
   await b.goto(invitation);
   await b.getByRole('tab', { name: 'Tạo tài khoản' }).click();
-  await b.getByLabel('Tên đăng nhập', { exact: true }).fill(accountName());
+  const guestUsername = accountName();
+  await b.getByLabel('Tên đăng nhập', { exact: true }).fill(guestUsername);
+  await b.getByLabel('Họ và tên', { exact: true }).fill(guestUsername);
+  await b.getByLabel('Email', { exact: true }).fill(`${guestUsername}@example.com`);
   await b.locator('#password').fill('test-password-123');
+  await b.getByLabel('Nhập lại mật khẩu', { exact: true }).fill('test-password-123');
   await b.getByRole('button', { name: 'Tạo tài khoản', exact: true }).click();
   await expect(b.getByRole('heading', { name: 'Cùng một cuộc trò chuyện.' })).toBeVisible();
   await b.getByRole('button', { name: 'Vào phòng', exact: true }).click();
   await expect(b.getByRole('status')).toHaveText('Đã kết nối');
+  for (const page of [a, b]) {
+    await expect(page.locator('textarea[aria-label^="Tin nhắn người "]')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Bắt đầu nghe', exact: true })).toBeVisible();
+  }
   await expect(a.getByText('Đang chờ người còn lại.', { exact: false })).toHaveCount(0);
-  await Promise.all([send(a, 'A', 'Xin chào'), send(b, 'B', 'How are you?')]);
+  await Promise.all([seedTranscriptMessage(a, 'A', 'Xin chào'), seedTranscriptMessage(b, 'B', 'How are you?')]);
   for (const page of [a, b]) {
     await expect(page.getByText('Hello', { exact: true })).toBeVisible();
     await expect(page.getByText('Bạn khỏe không?', { exact: true })).toBeVisible();
     await expect(page.locator('[data-message-id]')).toHaveCount(2);
+    await expect(page.locator('textarea[aria-label^="Tin nhắn người "]')).toHaveCount(0);
+    await expect(page.locator('.message-text.preferred').first()).toHaveCSS('font-size', '22px');
+    await expect(page.locator('.message-translation').first()).toHaveCSS('font-size', '28px');
   }
   await b.reload();
   await expect(b.getByText('Bạn khỏe không?', { exact: true })).toBeVisible();
@@ -78,7 +107,7 @@ test('two signed-in phones join by invitation and exchange both directions', asy
   await first.close(); await second.close();
 });
 
-test('microphone denial leaves text conversation usable', async ({ page }) => {
+test('microphone denial shows recovery without suggesting text input', async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
       value: async () => { throw new DOMException('Permission denied', 'NotAllowedError'); },
@@ -87,11 +116,25 @@ test('microphone denial leaves text conversation usable', async ({ page }) => {
   await register(page); await create(page);
   await page.getByRole('button', { name: 'Bắt đầu nghe', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('chưa cho phép dùng micro');
-  await send(page, 'A', 'Xin chào');
-  await expect(page.getByText('Hello', { exact: true })).toHaveCount(2);
+  await expect(page.getByRole('button', { name: 'Bắt đầu nghe', exact: true })).toBeVisible();
+  await expect(page.locator('textarea[aria-label^="Tin nhắn người "]')).toHaveCount(0);
+  await expect(page.getByText(/nhập chữ|nhập lời/i)).toHaveCount(0);
 });
 
-test('AudioWorklet sends live PCM and stopping commits the last spoken segment', async ({ page }) => {
+test('disabled speech configuration explains voice input is unavailable', async ({ page }) => {
+  await page.route('**/api/config', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ languages: {}, speech: 'disabled', translation_configured: true }),
+  }));
+  await register(page); await create(page);
+  await expect(page.getByRole('button', { name: 'Bắt đầu nghe', exact: true })).toBeDisabled();
+  await expect(page.getByText(/nhận giọng nói chưa sẵn sàng/i)).toBeVisible();
+  await expect(page.locator('textarea[aria-label^="Tin nhắn người "]')).toHaveCount(0);
+});
+
+test('microphone capture can start and stop without text input', async ({ page }) => {
+  await page.route('**/api/config', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ languages: {}, speech: 'ready', translation_configured: true }) }));
   await page.addInitScript(() => {
     // A deterministic live audio source exercises AudioWorklet and WebSocket;
     // only the server's expensive recognizer is replaced by the test adapter.
@@ -104,7 +147,7 @@ test('AudioWorklet sends live PCM and stopping commits the last spoken segment',
         const gain = context.createGain(); gain.gain.value = .15;
         const destination = context.createMediaStreamDestination();
         oscillator.connect(gain).connect(destination); oscillator.start();
-        window.__audioSource = { context, oscillator };
+        window.__audioSource = { context, oscillator, stream: destination.stream };
         return destination.stream;
       },
     });
@@ -112,10 +155,10 @@ test('AudioWorklet sends live PCM and stopping commits the last spoken segment',
   await register(page); await create(page);
   await page.getByRole('button', { name: 'Bắt đầu nghe', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Dừng micro', exact: true })).toBeVisible();
-  await expect(page.getByText('Đang nghe người A…', { exact: false }).first()).toBeVisible({ timeout: 12000 });
+  await expect(page.locator('textarea[aria-label^="Tin nhắn người "]')).toHaveCount(0);
   await page.getByRole('button', { name: 'Dừng micro', exact: true }).click();
-  await expect(page.getByText('Hello', { exact: true })).toHaveCount(2);
   await expect(page.getByRole('button', { name: 'Bắt đầu nghe', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => window.__audioSource.stream.getTracks().every(track => track.readyState === 'ended'))).toBe(true);
   await page.evaluate(() => window.__audioSource.context.close());
 });
 
@@ -128,30 +171,49 @@ test('reconnecting socket resyncs missed messages without duplication', async ({
     };
   });
   await register(page); await create(page);
-  await send(page, 'A', 'Xin chào');
-  await expect(page.getByText('Hello', { exact: true })).toHaveCount(2);
+  await seedTranscriptMessage(page, 'A', 'Xin chào');
+  await expect(page.getByText('Hello', { exact: true })).toHaveCount(1);
   await page.evaluate(() => window.__connections.at(-1).close());
   await expect(page.getByRole('status')).toContainText('Đang kết nối lại');
-  await send(page, 'B', 'How are you?');
+  await seedTranscriptMessage(page, 'B', 'How are you?');
   await expect(page.getByRole('status')).toHaveText('Đã kết nối');
-  await expect(page.getByText('Bạn khỏe không?', { exact: true })).toHaveCount(2);
-  await expect(page.locator('[data-message-id]')).toHaveCount(4);
+  await expect(page.getByText('Bạn khỏe không?', { exact: true })).toHaveCount(1);
+  await expect(page.locator('[data-message-id]')).toHaveCount(2);
 });
 
-test('mobile landscape keeps both composers accessible', async ({ page }) => {
+test('mobile landscape keeps voice control accessible', async ({ page }) => {
   await page.setViewportSize({ width: 844, height: 390 });
   await register(page); await create(page);
-  for (const side of ['A', 'B']) await expect(page.getByRole('textbox', { name: `Tin nhắn người ${side}` })).toBeInViewport();
+  await expect(page.locator('textarea[aria-label^="Tin nhắn người "]')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Bắt đầu nghe', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test('voice room remains scrollable and microphone reachable with enlarged text', async ({ page }) => {
+  await register(page);
+  await create(page);
+  await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+  await expect(page.locator('textarea[aria-label^="Tin nhắn người "]')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Bắt đầu nghe', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Bắt đầu nghe', exact: true }).scrollIntoViewIfNeeded();
+  await expect(page.getByRole('button', { name: 'Bắt đầu nghe', exact: true })).toBeInViewport();
+  await page.setViewportSize({ width: 320, height: 700 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.getByRole('link', { name: 'Về danh sách hội thoại' }).click();
+  await expect(page.getByRole('button', { name: 'Tạo cuộc trò chuyện', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.getByRole('button', { name: 'Tạo cuộc trò chuyện', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 });
 
 test('history persists and owner can delete the conversation', async ({ page }) => {
   await register(page); await create(page);
-  await send(page, 'A', 'Xin chào');
-  await expect(page.getByText('Hello', { exact: true })).toHaveCount(2);
+  await seedTranscriptMessage(page, 'A', 'Xin chào');
+  await expect(page.getByText('Hello', { exact: true })).toHaveCount(1);
   await page.getByRole('link', { name: 'Về danh sách hội thoại' }).click();
   await page.getByRole('link', { name: /Cà phê cùng bạn/ }).click();
-  await expect(page.getByText('Hello', { exact: true })).toHaveCount(2);
+  await expect(page.getByText('Hello', { exact: true })).toHaveCount(1);
   await page.getByRole('link', { name: 'Về danh sách hội thoại' }).click();
   await page.getByRole('button', { name: 'Xóa Cà phê cùng bạn' }).click();
   await page.getByRole('button', { name: 'Xóa hội thoại', exact: true }).click();

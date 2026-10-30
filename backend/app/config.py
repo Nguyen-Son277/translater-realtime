@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -34,6 +35,11 @@ class Settings(BaseSettings):
     translation_concurrency: int = Field(default=2, ge=1, le=8)
     translation_queue_size: int = Field(default=32, ge=1, le=128)
     speech_enabled: bool = True
+    speech_backend: Literal["nemotron", "whisper"] = "nemotron"
+    speech_model: str = "nvidia/nemotron-3.5-asr-streaming-0.6b"
+    speech_device: str = "cpu"
+    speech_cpu_threads: int = Field(default=4, ge=1, le=64)
+    speech_download_root: str = "./models"
     whisper_model: str = "base"
     whisper_device: str = "cpu"
     whisper_compute_type: str = "int8"
@@ -53,4 +59,6 @@ class Settings(BaseSettings):
         if self.database_url.startswith("sqlite:///") and ":memory:" not in self.database_url:
             Path(self.database_url.removeprefix("sqlite:///")).parent.mkdir(parents=True, exist_ok=True)
         if self.speech_enabled:
-            Path(self.whisper_download_root).mkdir(parents=True, exist_ok=True)
+            root = (self.speech_download_root if self.speech_backend == "nemotron"
+                    else self.whisper_download_root)
+            Path(root).mkdir(parents=True, exist_ok=True)

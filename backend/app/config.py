@@ -21,6 +21,10 @@ LANGUAGE_NAMES = {
 }
 
 
+WS_PING_INTERVAL = 10.0
+WS_PONG_DEADLINE = 30.0
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -28,6 +32,9 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     session_days: int = Field(default=7, ge=1, le=30)
     allowed_origins: str = ""
+    auth_rate_limit: int = Field(default=60, ge=1)
+    ws_ping_interval: float = Field(default=10.0, ge=0.01, le=60.0)
+    ws_pong_deadline: float = Field(default=30.0, ge=0.01, le=120.0)
     translation_base_url: str = ""
     translation_model: str = ""
     translation_api_key: str = ""

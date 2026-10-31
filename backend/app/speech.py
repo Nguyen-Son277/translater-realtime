@@ -9,6 +9,7 @@ import numpy as np
 import webrtcvad
 
 logger = logging.getLogger(__name__)
+DRAIN_TIMEOUT = 15.0
 
 
 @dataclass
@@ -192,9 +193,10 @@ class AudioSegmenter:
 class AudioStream:
     """One bounded stream per capture. Finals take priority over disposable previews."""
 
-    def __init__(self, recognizer, connection, room, settings, hub, on_final):
+    def __init__(self, recognizer, connection, room, settings, hub, on_final, capture_id=None):
         self.recognizer, self.connection, self.room = recognizer, connection, room
         self.settings, self.hub, self.on_final = settings, hub, on_final
+        self.capture_id = capture_id
         self.segmenter = AudioSegmenter(
             silence_ms=settings.speech_silence_ms,
             max_ms=settings.speech_max_segment_ms,
@@ -207,6 +209,7 @@ class AudioStream:
         self.finished = set()
         self.preview_ids = set()
         self.processing = False
+        self.cleanup_task = None
         self.worker = asyncio.create_task(self.run())
 
     def offer(self, piece):
@@ -249,18 +252,36 @@ class AudioStream:
             return "B"
         return None
 
+    def detach(self, flush=True):
+        if not self.stopping:
+            if flush:
+                for piece in self.segmenter.flush():
+                    try:
+                        self.offer(piece)
+                    except OverflowError:
+                        logger.warning("Audio tail rejected: capture queue full, room_id=%s", self.room.id)
+            self.partial = None
+            self.stopping = True
+            self.cleanup_task = asyncio.create_task(self.clear_previews())
+            self.wake.set()
+
+    async def clear_previews(self):
+        for segment_id in tuple(self.preview_ids):
+            await self.preview(segment_id, "")
+
     async def run(self):
         while True:
             await self.wake.wait()
             if self.finals:
                 piece = self.finals.popleft()
-            elif self.partial:
+            elif self.partial and not self.stopping:
                 piece, self.partial = self.partial, None
             elif self.stopping:
                 break
             else:
                 self.wake.clear()
                 continue
+
             if self.room.mode == "remote":
                 language = self.room.language_a if self.connection.side == "A" else self.room.language_b
             else:
@@ -272,6 +293,8 @@ class AudioStream:
             self.processing = True
             try:
                 if piece.kind == "partial":
+                    if self.stopping:
+                        continue
                     result = await self.recognizer.transcribe_preview(piece.pcm, language)
                     if result is None:
                         continue
@@ -293,8 +316,9 @@ class AudioStream:
                 logger.exception("Speech processing failed: room_id=%s", self.room.id)
                 await self.preview(piece.segment_id, "")
                 try:
+                    correlated = {"capture_id": self.capture_id} if self.capture_id is not None else {}
                     await self.connection.send({"type": "error", "code": "speech_failed",
-                                                "detail": "Không nhận dạng được đoạn nói. Hãy thử lại hoặc nhập chữ."})
+                                                "detail": "Không nhận dạng được đoạn nói. Hãy thử lại hoặc nhập chữ.", **correlated})
                 except Exception:
                     pass
             finally:
@@ -306,20 +330,27 @@ class AudioStream:
                 self.finished = {piece.segment_id}
 
     async def stop(self, flush=True):
-        if not self.stopping:
-            if flush:
-                for piece in self.segmenter.flush():
-                    try:
-                        self.offer(piece)
-                    except OverflowError:
-                        logger.warning("Audio tail rejected: capture queue full, room_id=%s", self.room.id)
-            self.partial = None
-            self.stopping = True
-            self.wake.set()
+        self.detach(flush=flush)
         try:
-            await asyncio.wait_for(asyncio.shield(self.worker), timeout=90)
+            await asyncio.wait_for(asyncio.shield(self.worker), timeout=DRAIN_TIMEOUT)
         except TimeoutError:
+            logger.warning("Audio stream drain timed out, room_id=%s", self.room.id)
+            self.worker.cancel()
+            try:
+                correlated = {"capture_id": self.capture_id} if self.capture_id is not None else {}
+                await self.connection.send({"type": "error", "code": "speech_drain_timeout",
+                                            "detail": "Một đoạn nói trước chưa xử lý xong do quá tải. Hãy kiểm tra hội thoại và nói lại phần bị thiếu.", **correlated})
+            except Exception:
+                pass
+            # Native inference cannot be interrupted safely. Keep its semaphore and
+            # drain slot until it actually returns instead of starting overlapping work.
+            await asyncio.gather(self.worker, return_exceptions=True)
+        except asyncio.CancelledError:
             self.worker.cancel()
             await asyncio.gather(self.worker, return_exceptions=True)
-        for segment_id in tuple(self.preview_ids):
-            await self.preview(segment_id, "")
+            raise
+        finally:
+            self.finals.clear()
+            if self.cleanup_task:
+                await asyncio.gather(self.cleanup_task, return_exceptions=True)
+            await self.clear_previews()

@@ -9,6 +9,6 @@ from tests.fakes import FakeRecognizer, FakeTranslator
 directory = tempfile.TemporaryDirectory(prefix="songngu-e2e-")
 app = create_app(
     Settings(_env_file=None, database_url=f"sqlite:///{Path(directory.name) / 'app.db'}",
-             speech_enabled=False),
+             speech_enabled=False, auth_rate_limit=500),
     recognizer=FakeRecognizer(), translator=FakeTranslator(),
 )

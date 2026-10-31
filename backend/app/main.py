@@ -16,7 +16,6 @@ from fastapi import (
     Request,
     Response,
     WebSocket,
-    WebSocketDisconnect,
 )
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
@@ -36,9 +35,9 @@ from app.auth import (
     user_dict,
     verify_password,
 )
-from app.config import LANGUAGES, Settings
+from app.config import LANGUAGES, WS_PING_INTERVAL, WS_PONG_DEADLINE, Settings
 from app.db import Database
-from app.hub import Connection, Hub
+from app.hub import DISCONNECTED, Connection, Hub
 from app.models import Membership, Message, Room, Session, User, utcnow
 from app.schemas import (
     AssignSpeaker,
@@ -82,6 +81,7 @@ def create_app(settings=None, recognizer=None, translator=None):
         yield
         for room_id in tuple(hub.rooms):
             await hub.close_room(room_id)
+        await hub.close_drains()
         await jobs.close()
         await recognizer.close()
         database.engine.dispose()
@@ -112,7 +112,8 @@ def create_app(settings=None, recognizer=None, translator=None):
         bucket = attempts[key]
         while bucket and bucket[0] < now - 60:
             bucket.popleft()
-        if len(bucket) >= 20:
+        limit = getattr(settings, "auth_rate_limit", 60)
+        if len(bucket) >= limit:
             raise HTTPException(429, "Bạn đã thử nhiều lần. Vui lòng đợi một phút.")
         bucket.append(now)
         if len(attempts) > 10000:
@@ -304,21 +305,40 @@ def create_app(settings=None, recognizer=None, translator=None):
             await websocket.close(4404)
             return
         await websocket.accept()
+        presence_before = hub.presence(room_id)
         connection = Connection(websocket, user.id, room_id, member.side, digest_token(token))
         hub.add(connection)
+        presence_after = hub.presence(room_id)
+        if presence_after != presence_before:
+            await hub.broadcast_presence(room_id, exclude=connection)
         stream = None
+        last_pong = monotonic()
+        ping_interval = getattr(settings, "ws_ping_interval", WS_PING_INTERVAL)
+        pong_deadline = getattr(settings, "ws_pong_deadline", WS_PONG_DEADLINE)
 
         async def heartbeat():
-            # PCM arrives even during silence. A separate timer keeps the proxy's
-            # server-to-client idle timeout alive while no transcripts are emitted.
+            nonlocal last_pong
             try:
                 while True:
-                    await asyncio.sleep(20)
+                    await asyncio.sleep(ping_interval)
+                    now = monotonic()
+                    if now - last_pong >= pong_deadline or connection not in hub.rooms.get(room_id, ()):
+                        hub.remove(connection)
+                        await hub.broadcast_presence(room_id)
+                        await connection.close(1000)
+                        return
                     if not find_user(database, token):
                         await connection.close(4401)
                         return
                     await connection.send({"type": "ping"})
-            except (WebSocketDisconnect, RuntimeError):
+            except DISCONNECTED:
+                hub.remove(connection)
+                await hub.broadcast_presence(room_id)
+                try:
+                    await connection.close(1000)
+                except DISCONNECTED:
+                    pass
+            except asyncio.CancelledError:
                 pass
 
         heartbeat_task = asyncio.create_task(heartbeat())
@@ -341,16 +361,17 @@ def create_app(settings=None, recognizer=None, translator=None):
                 page = messages.snapshot(room_id, user.id)
                 snapshot, has_more = page["messages"], page["has_more"]
             await connection.send({"type": "room.snapshot", "room": room_payload,
-                                   "messages": snapshot, "has_more": has_more})
-            while True:
+                                   "messages": snapshot, "has_more": has_more,
+                                   "presence": hub.presence(room_id)})
+            while connection in hub.rooms.get(room_id, ()):
                 try:
-                    packet = await asyncio.wait_for(websocket.receive(), timeout=25)
+                    packet = await asyncio.wait_for(websocket.receive(), timeout=pong_deadline + 5)
                 except TimeoutError:
                     if not find_user(database, token):
                         await connection.close(4401)
                         break
                     continue
-                if packet["type"] == "websocket.disconnect":
+                if packet["type"] == "websocket.disconnect" or connection not in hub.rooms.get(room_id, ()):
                     break
                 if not find_user(database, token):
                     await connection.close(4401)
@@ -361,20 +382,24 @@ def create_app(settings=None, recognizer=None, translator=None):
                         await connection.send({"type": "error", "code": "audio_not_started",
                                                "detail": "Hãy bắt đầu micro trước khi gửi âm thanh."})
                     elif len(data) > 32000 or len(data) % 2:
+                        correlated = {"capture_id": stream.capture_id} if stream and stream.capture_id is not None else {}
                         await connection.send({"type": "error", "code": "invalid_audio",
-                                               "detail": "Gói âm thanh không hợp lệ."})
+                                               "detail": "Gói âm thanh không hợp lệ.", **correlated})
                         await connection.close(4400)
                         break
                     else:
                         try:
                             stream.feed(data)
                         except OverflowError:
+                            correlated = {"capture_id": stream.capture_id} if stream and stream.capture_id is not None else {}
                             await connection.send({"type": "error", "code": "audio_queue_full",
-                                                   "detail": "Nhận giọng nói đang quá tải. Hãy tạm dừng rồi thử lại."})
-                            await stream.stop(flush=False)
+                                                   "detail": "Nhận giọng nói đang quá tải. Hãy tạm dừng rồi thử lại.", **correlated})
+                            active_stream = stream
                             stream = None
-                            hub.release_capture(connection)
-                            await connection.send({"type": "audio.state", "recording": False})
+                            hub.drain_capture(connection, room.mode, active_stream, flush=False)
+                            hub.release_capture(connection, capture_id=active_stream.capture_id)
+                            await connection.send({"type": "audio.state", "recording": False, **correlated})
+                            await hub.broadcast_presence(room.id, exclude=connection)
                     continue
                 try:
                     if len(packet.get("text", "")) > 20000:
@@ -384,27 +409,52 @@ def create_app(settings=None, recognizer=None, translator=None):
                         raise ValueError("invalid_packet")
                     kind = event.get("type")
                     if kind == "pong":
+                        last_pong = monotonic()
                         continue
+                    if kind in {"audio.start", "audio.stop"}:
+                        capture_id = event.get("capture_id")
+                        if capture_id is not None and (not isinstance(capture_id, str) or not 1 <= len(capture_id) <= 128):
+                            raise ValueError("invalid_capture_id")
                     if kind == "audio.start":
+                        capture_id = event.get("capture_id")
+                        correlated = {"capture_id": capture_id} if capture_id is not None else {}
                         if stream:
-                            await connection.send({"type": "audio.state", "recording": True})
+                            if capture_id is not None and stream.capture_id != capture_id:
+                                await connection.send({"type": "error", "code": "capture_busy",
+                                                       "detail": "Phiên micro trước vẫn đang mở. Hãy dừng trước khi mở phiên mới.", **correlated})
+                            else:
+                                await connection.send({"type": "audio.state", "recording": True, **correlated})
                             continue
                         if recognizer.state != "ready":
                             await connection.send({"type": "error", "code": "speech_unavailable",
-                                                   "detail": "Nhận giọng nói chưa sẵn sàng. Bạn có thể nhập chữ."})
+                                                   "detail": "Nhận giọng nói chưa sẵn sàng. Bạn có thể nhập chữ.", **correlated})
                             continue
-                        if not hub.acquire_capture(connection, room.mode):
+                        if not hub.can_start_capture(connection, room.mode):
+                            await connection.send({"type": "error", "code": "capture_busy",
+                                                   "detail": "Đang xử lý các đoạn nói trước. Chờ một chút rồi bấm bắt đầu lại.", **correlated})
+                            continue
+                        if not hub.acquire_capture(connection, room.mode, capture_id=capture_id):
                             await connection.send({"type": "error", "code": "capture_in_use",
-                                                   "detail": "Micro đang được sử dụng trong một cửa sổ khác."})
+                                                   "detail": "Micro đang được sử dụng trong một cửa sổ khác.", **correlated})
                             continue
-                        stream = AudioStream(recognizer, connection, room, settings, hub, on_final)
-                        await connection.send({"type": "audio.state", "recording": True})
+                        stream = AudioStream(recognizer, connection, room, settings, hub, on_final, capture_id=capture_id)
+                        await connection.send({"type": "audio.state", "recording": True, **correlated})
+                        await hub.broadcast_presence(room.id, exclude=connection)
                     elif kind == "audio.stop":
+                        capture_id = event.get("capture_id")
+                        correlated = {"capture_id": capture_id} if capture_id is not None else {}
                         if stream:
-                            await stream.stop()
-                            stream = None
-                        hub.release_capture(connection)
-                        await connection.send({"type": "audio.state", "recording": False})
+                            if capture_id is not None and capture_id != stream.capture_id:
+                                pass
+                            else:
+                                active_stream = stream
+                                stream = None
+                                hub.drain_capture(connection, room.mode, active_stream, flush=True)
+                                hub.release_capture(connection, capture_id=active_stream.capture_id)
+                                await connection.send({"type": "audio.state", "recording": False, **correlated})
+                                await hub.broadcast_presence(room.id, exclude=connection)
+                        else:
+                            await connection.send({"type": "audio.state", "recording": False, **correlated})
                     elif kind == "text.submit":
                         body = TextMessage.model_validate(event)
                         result = await messages.submit(room_id, user.id, body.text,
@@ -418,7 +468,7 @@ def create_app(settings=None, recognizer=None, translator=None):
                                            "detail": "Dữ liệu gửi lên không hợp lệ."})
                 except HTTPException as exc:
                     await connection.send({"type": "error", "code": "request_failed", "detail": exc.detail})
-        except (WebSocketDisconnect, RuntimeError):
+        except DISCONNECTED:
             pass
         finally:
             hub.remove(connection)
@@ -426,7 +476,8 @@ def create_app(settings=None, recognizer=None, translator=None):
                 heartbeat_task.cancel()
                 await asyncio.gather(heartbeat_task, return_exceptions=True)
                 if stream:
-                    await stream.stop()
+                    hub.drain_capture(connection, room.mode, stream, flush=False)
+                await hub.broadcast_presence(room_id)
 
     return app
 

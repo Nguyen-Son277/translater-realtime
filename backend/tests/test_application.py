@@ -176,12 +176,24 @@ def test_audio_capture_lease_and_no_permission_leak(actor):
         second.receive_json()
         first.send_json({"type": "audio.start"})
         assert first.receive_json() == {"type": "audio.state", "recording": True}
+        assert second.receive_json() == {"type": "room.presence", "members": [
+            {"side": "A", "online": True, "recording": True},
+            {"side": "B", "online": False, "recording": False},
+        ]}
         second.send_json({"type": "audio.start"})
         assert second.receive_json()["code"] == "capture_in_use"
         first.send_json({"type": "audio.stop"})
         assert first.receive_json()["recording"] is False
+        assert second.receive_json() == {"type": "room.presence", "members": [
+            {"side": "A", "online": True, "recording": False},
+            {"side": "B", "online": False, "recording": False},
+        ]}
         second.send_json({"type": "audio.start"})
         assert second.receive_json()["recording"] is True
+        assert first.receive_json() == {"type": "room.presence", "members": [
+            {"side": "A", "online": True, "recording": True},
+            {"side": "B", "online": False, "recording": False},
+        ]}
 
 
 def test_pagination_and_delete_cascade(system, actor):

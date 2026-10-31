@@ -4,8 +4,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api, LANGUAGES } from '../api';
 import { useAuth } from '../auth';
 import { Header, Modal } from '../components';
+import { useI18n } from '../i18n';
 
 function CreateRoom({ onClose }) {
+  const { t, localizeError } = useI18n();
   const navigate = useNavigate();
   const [mode, setMode] = useState('shared');
   const [a, setA] = useState('vi');
@@ -20,24 +22,24 @@ function CreateRoom({ onClose }) {
       navigate(`/rooms/${room.id}`);
     } catch (err) { setError(err.message); setBusy(false); }
   };
-  return <Modal title="Một cuộc trò chuyện mới" onClose={onClose}>
-    <p className="muted modal-intro">Chọn cách kết nối. Phần ngôn ngữ cứ để Song Ngữ.</p>
+  return <Modal title={t('dashboard.createTitle')} onClose={onClose}>
+    <p className="muted modal-intro">{t('dashboard.createIntro')}</p>
     <form onSubmit={submit}>
-      <fieldset className="mode-options"><legend className="field-label">Hai bạn sẽ dùng thiết bị thế nào?</legend>
-        {[['shared', Smartphone, 'Một máy chung', 'Cùng xem một màn hình'], ['remote', UsersRound, 'Hai máy riêng', 'Kết nối qua liên kết hoặc QR']].map(([value, Icon, title, description]) =>
+      <fieldset className="mode-options"><legend className="field-label">{t('dashboard.deviceQuestion')}</legend>
+        {[['shared', Smartphone, t('dashboard.shared'), t('dashboard.sharedHint')], ['remote', UsersRound, t('dashboard.remote'), t('dashboard.remoteHint')]].map(([value, Icon, title, description]) =>
           <label key={value} className={`mode-option ${mode === value ? 'selected' : ''}`}><input type="radio" name="mode" value={value} checked={mode === value} onChange={() => setMode(value)} /><Icon size={23} /><strong>{title}</strong><small>{description}</small><span className="radio-indicator" /></label>)}
       </fieldset>
-      <label className="field-label" htmlFor="room-title">Tên hội thoại <small>Không bắt buộc</small></label>
-      <input id="room-title" name="title" placeholder="Ví dụ: Cà phê cùng Alex" maxLength={100} />
+      <label className="field-label" htmlFor="room-title">{t('dashboard.title')} <small>{t('dashboard.optional')}</small></label>
+      <input id="room-title" name="title" placeholder={t('dashboard.titlePlaceholder')} maxLength={100} />
       <div className="language-pair-select">
-        <label><span className="field-label">Người A</span><select aria-label="Ngôn ngữ người A" value={a} onChange={event => setA(event.target.value)}>{Object.entries(LANGUAGES).map(([code, lang]) => <option key={code} value={code}>{lang.name}</option>)}</select></label>
-        <button className="icon-btn swap-languages" type="button" aria-label="Đổi hai ngôn ngữ" onClick={() => { setA(b); setB(a); }}><ArrowDownUp size={18} /></button>
-        <label><span className="field-label">Người B</span><select aria-label="Ngôn ngữ người B" value={b} onChange={event => setB(event.target.value)}>{Object.entries(LANGUAGES).map(([code, lang]) => <option key={code} value={code}>{lang.name}</option>)}</select></label>
+        <label><span className="field-label">{t('dashboard.personA')}</span><select aria-label={t('dashboard.languageA')} value={a} onChange={event => setA(event.target.value)}>{Object.keys(LANGUAGES).map(code => <option key={code} value={code}>{t(`common.language.${code}`)}</option>)}</select></label>
+        <button className="icon-btn swap-languages" type="button" aria-label={t('dashboard.swap')} onClick={() => { setA(b); setB(a); }}><ArrowDownUp size={18} /></button>
+        <label><span className="field-label">{t('dashboard.personB')}</span><select aria-label={t('dashboard.languageB')} value={b} onChange={event => setB(event.target.value)}>{Object.keys(LANGUAGES).map(code => <option key={code} value={code}>{t(`common.language.${code}`)}</option>)}</select></label>
       </div>
-      {a === b && <p className="form-error">Hãy chọn hai ngôn ngữ khác nhau.</p>}
-      {error && <p role="alert" className="form-error">{error}</p>}
-      <button className="btn btn-primary full-width" disabled={busy || a === b}>{busy ? <span className="spinner" /> : <>Bắt đầu trò chuyện <ArrowRight size={18} /></>}</button>
-      <p className="form-footnote">Bấm Bắt đầu nghe trong phòng để dịch giọng nói.</p>
+      {a === b && <p className="form-error">{t('dashboard.differentLanguages')}</p>}
+      {error && <p role="alert" className="form-error">{localizeError(error)}</p>}
+      <button className="btn btn-primary full-width" disabled={busy || a === b}>{busy ? <span className="spinner" /> : <>{t('dashboard.start')} <ArrowRight size={18} /></>}</button>
+      <p className="form-footnote">{t('dashboard.startHint')}</p>
     </form>
   </Modal>;
 }
@@ -48,17 +50,19 @@ export function inviteToken(value) {
 }
 
 function JoinModal({ onClose }) {
+  const { t } = useI18n();
   const navigate = useNavigate();
-  return <Modal title="Tham gia cuộc trò chuyện" onClose={onClose}>
-    <p className="muted modal-intro">Dán liên kết hoặc mã mời mà người kia chia sẻ.</p>
+  return <Modal title={t('dashboard.joinTitle')} onClose={onClose}>
+    <p className="muted modal-intro">{t('dashboard.joinIntro')}</p>
     <form onSubmit={event => { event.preventDefault(); const token = inviteToken(new FormData(event.currentTarget).get('invite')); navigate(`/join#token=${encodeURIComponent(token)}`); }}>
-      <label className="field-label" htmlFor="invite">Liên kết hoặc mã mời</label><input id="invite" name="invite" required placeholder="Dán lời mời tại đây…" />
-      <button className="btn btn-primary full-width mt-5">Tiếp tục <ArrowRight size={18} /></button>
+      <label className="field-label" htmlFor="invite">{t('dashboard.invite')}</label><input id="invite" name="invite" required placeholder={t('dashboard.invitePlaceholder')} />
+      <button className="btn btn-primary full-width mt-5">{t('dashboard.continue')} <ArrowRight size={18} /></button>
     </form>
   </Modal>;
 }
 
 export function Dashboard() {
+  const { t, formatLocale, localizeError } = useI18n();
   const { user } = useAuth();
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -83,26 +87,26 @@ export function Dashboard() {
     <Header />
     <main className="dashboard-main">
       <section className="welcome-section">
-        <div className="welcome-copy"><span className="eyebrow"><span className="status-dot" /> KHÔNG CÒN RÀO CẢN NGÔN NGỮ</span>
-          <h1>Hiểu nhau,<br /><em>ngay lúc này.</em></h1>
-          <p>Xin chào {user.name || user.username}. Mỗi người một ngôn ngữ,<br className="desktop-break" /> cùng chia sẻ một câu chuyện.</p>
-          <div className="welcome-actions"><button className="btn btn-primary" onClick={() => setModal({ type: 'create' })}><Plus size={19} /> Tạo cuộc trò chuyện</button><button className="btn btn-secondary" onClick={() => setModal({ type: 'join' })}><Link2 size={18} /> Tham gia phòng</button></div>
+        <div className="welcome-copy"><span className="eyebrow"><span className="status-dot" /> {t('dashboard.eyebrow')}</span>
+          <h1>{t('dashboard.heading')}<br /><em>{t('dashboard.headingEmphasis')}</em></h1>
+          <p>{t('dashboard.greeting', { name: user.name || user.username })}</p>
+          <div className="welcome-actions"><button className="btn btn-primary" onClick={() => setModal({ type: 'create' })}><Plus size={19} /> {t('dashboard.create')}</button><button className="btn btn-secondary" onClick={() => setModal({ type: 'join' })}><Link2 size={18} /> {t('dashboard.join')}</button></div>
         </div>
-        <div className="welcome-art" aria-hidden="true"><div className="art-orbit" /><span className="art-language art-lang-top">你好</span><span className="art-language art-lang-bottom">안녕하세요</span><div className="art-card art-card-a"><span className="art-avatar">A</span><div><small>TIẾNG VIỆT</small><strong>Chào bạn, mình là An.</strong></div><span className="art-dot" /></div><div className="art-bridge"><AudioLines size={27} /></div><div className="art-card art-card-b"><span className="art-avatar">B</span><div><small>ENGLISH</small><strong>Hi, I'm An. Nice to meet you.</strong></div></div><span className="art-caption"><span /> HIỂU NHAU TRONG TỪNG CÂU NÓI</span></div>
+        <div className="welcome-art" aria-hidden="true"><div className="art-orbit" /><span className="art-language art-lang-top">你好</span><span className="art-language art-lang-bottom">안녕하세요</span><div className="art-card art-card-a"><span className="art-avatar">A</span><div><small>TIẾNG VIỆT</small><strong>Chào bạn, mình là An.</strong></div><span className="art-dot" /></div><div className="art-bridge"><AudioLines size={27} /></div><div className="art-card art-card-b"><span className="art-avatar">B</span><div><small>ENGLISH</small><strong>Hi, I'm An. Nice to meet you.</strong></div></div><span className="art-caption"><span /> {t('dashboard.artCaption')}</span></div>
       </section>
-      <div className="feature-strip"><span><AudioLines size={17} /> Dịch hội thoại trực tiếp</span><span><Smartphone size={17} /> Một máy chung hoặc hai máy</span><span><Globe2 size={17} /> 8 ngôn ngữ, hai chiều</span></div>
+      <div className="feature-strip"><span><AudioLines size={17} /> {t('dashboard.featureLive')}</span><span><Smartphone size={17} /> {t('dashboard.featureDevices')}</span><span><Globe2 size={17} /> {t('dashboard.featureLanguages')}</span></div>
       <section className="history-section">
-        <div className="section-heading"><div><span className="section-kicker">NHỮNG CÂU CHUYỆN CỦA BẠN</span><h2>Cuộc trò chuyện <span className="count-badge">{rooms.length}</span></h2></div>{rooms.length > 0 && <input className="search-input" aria-label="Tìm hội thoại" placeholder="Tìm cuộc trò chuyện…" value={query} onChange={event => setQuery(event.target.value)} />}</div>
-        {error && <div className="alert" role="alert">{error}<button className="text-button" onClick={load}>Thử lại</button></div>}
-        {loading ? <div className="history-loading"><span className="spinner" /> Đang tải hội thoại…</div> : filtered.length ? <div className="room-grid">{filtered.map(room => <article className="room-card" key={room.id}>
-          <Link to={`/rooms/${room.id}`} className="room-card-link"><div className="room-card-top"><span className={`room-mode-icon ${room.mode}`}>{room.mode === 'shared' ? <Smartphone size={22} /> : <UsersRound size={22} />}</span><span className="mode-label">{room.mode === 'shared' ? 'MỘT MÁY CHUNG' : 'HAI MÁY RIÊNG'}</span><ArrowRight size={18} className="room-arrow" /></div><h3>{room.title}</h3><div className="room-language-pair"><span>{LANGUAGES[room.language_a].name}</span><ArrowDownUp size={13} /><span>{LANGUAGES[room.language_b].name}</span></div><div className="room-card-bottom"><span><Clock3 size={13} />{new Intl.DateTimeFormat('vi-VN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(room.updated_at))}</span><span>{room.members.length === 2 ? '2 người' : room.mode === 'shared' ? 'Đối thoại trực tiếp' : 'Chờ người còn lại'}</span></div></Link>
-          {room.owner_id === user.id && <button className="delete-room icon-btn" aria-label={`Xóa ${room.title}`} title="Xóa hội thoại" onClick={() => setModal({ type: 'delete', room })}><Trash2 size={16} /></button>}
-        </article>)}</div> : <div className="history-empty"><span className="history-empty-icon"><MessageCircleMore size={27} /></span><div><h3>{query ? 'Chưa tìm thấy hội thoại này.' : 'Câu chuyện đầu tiên đang chờ bạn.'}</h3><p>{query ? 'Thử tìm bằng một tên khác.' : 'Tạo phòng, chọn ngôn ngữ và bắt đầu bằng một lời chào.'}</p></div>{!query && <button className="icon-btn" aria-label="Tạo hội thoại đầu tiên" onClick={() => setModal({ type: 'create' })}><Plus size={21} /></button>}</div>}
+        <div className="section-heading"><div><span className="section-kicker">{t('dashboard.historyKicker')}</span><h2>{t('dashboard.historyTitle')} <span className="count-badge">{rooms.length}</span></h2></div>{rooms.length > 0 && <input className="search-input" aria-label={t('dashboard.searchLabel')} placeholder={t('dashboard.searchPlaceholder')} value={query} onChange={event => setQuery(event.target.value)} />}</div>
+        {error && <div className="alert" role="alert">{localizeError(error)}<button className="text-button" onClick={load}>{t('dashboard.retry')}</button></div>}
+        {loading ? <div className="history-loading"><span className="spinner" /> {t('dashboard.loading')}</div> : filtered.length ? <div className="room-grid">{filtered.map(room => <article className="room-card" key={room.id}>
+          <Link to={`/rooms/${room.id}`} className="room-card-link"><div className="room-card-top"><span className={`room-mode-icon ${room.mode}`}>{room.mode === 'shared' ? <Smartphone size={22} /> : <UsersRound size={22} />}</span><span className="mode-label">{room.mode === 'shared' ? t('dashboard.sharedBadge') : t('dashboard.remoteBadge')}</span><ArrowRight size={18} className="room-arrow" /></div><h3>{room.title}</h3><div className="room-language-pair"><span>{t(`common.language.${room.language_a}`)}</span><ArrowDownUp size={13} /><span>{t(`common.language.${room.language_b}`)}</span></div><div className="room-card-bottom"><span><Clock3 size={13} />{new Intl.DateTimeFormat(formatLocale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(room.updated_at))}</span><span>{room.members.length === 2 ? t('dashboard.twoPeople') : room.mode === 'shared' ? t('dashboard.direct') : t('dashboard.waiting')}</span></div></Link>
+          {room.owner_id === user.id && <button className="delete-room icon-btn" aria-label={t('dashboard.deleteNamed', { name: room.title })} title={t('dashboard.delete')} onClick={() => setModal({ type: 'delete', room })}><Trash2 size={16} /></button>}
+        </article>)}</div> : <div className="history-empty"><span className="history-empty-icon"><MessageCircleMore size={27} /></span><div><h3>{query ? t('dashboard.notFound') : t('dashboard.empty')}</h3><p>{query ? t('dashboard.searchHint') : t('dashboard.emptyHint')}</p></div>{!query && <button className="icon-btn" aria-label={t('dashboard.createFirst')} onClick={() => setModal({ type: 'create' })}><Plus size={21} /></button>}</div>}
       </section>
-      <footer className="dashboard-footer"><span>songngữ.</span><p>Mỗi lời nói đều xứng đáng được lắng nghe.</p><span className="footer-indicator"><span /> Âm thanh không được lưu</span></footer>
+      <footer className="dashboard-footer"><span>songngữ.</span><p>{t('dashboard.footer')}</p><span className="footer-indicator"><span /> {t('dashboard.audioPrivacy')}</span></footer>
     </main>
     {modal?.type === 'create' && <CreateRoom onClose={close} />}
     {modal?.type === 'join' && <JoinModal onClose={close} />}
-    {modal?.type === 'delete' && <Modal title="Xóa cuộc trò chuyện?" onClose={close}><p className="muted modal-intro">“{modal.room.title}” và toàn bộ nội dung sẽ được xóa khỏi lịch sử của cả hai người.</p>{error && <p className="form-error" role="alert">{error}</p>}<div className="modal-actions"><button className="btn btn-secondary" onClick={close}>Giữ lại</button><button className="btn btn-danger" onClick={remove} disabled={deleting}>{deleting ? 'Đang xóa…' : 'Xóa hội thoại'}</button></div></Modal>}
+    {modal?.type === 'delete' && <Modal title={t('dashboard.deleteTitle')} onClose={close}><p className="muted modal-intro">{t('dashboard.deleteDescription', { name: modal.room.title })}</p>{error && <p className="form-error" role="alert">{localizeError(error)}</p>}<div className="modal-actions"><button className="btn btn-secondary" onClick={close}>{t('dashboard.keep')}</button><button className="btn btn-danger" onClick={remove} disabled={deleting}>{deleting ? t('dashboard.deleting') : t('dashboard.delete')}</button></div></Modal>}
   </div>;
 }

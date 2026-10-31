@@ -58,10 +58,10 @@ Mở địa chỉ HTTPS được cấp trên cả hai điện thoại. Tạo và
 - **Tài khoản:** đăng ký bằng tên đăng nhập 3–32 ký tự `a-z`, số, `_`, `-`, `.`, họ tên, email và mật khẩu 8–128 ký tự nhập hai lần. Tên đăng nhập và email không được trùng tài khoản khác. Đăng nhập vẫn dùng tên đăng nhập và mật khẩu; phiên có hiệu lực 7 ngày. Bấm biểu tượng **Cài đặt tài khoản** trên thanh đầu trang để sửa email. Email chỉ hiển thị với chính bạn và chưa được xác minh qua thư.
 - **Tài khoản cũ:** migration tự dùng tên đăng nhập làm tên hiển thị, để email trống (**Chưa cập nhật**) và giữ nguyên mật khẩu, phiên đăng nhập, hội thoại. Có thể bổ sung email trong cài đặt sau khi đăng nhập.
 - **Một máy chung:** hai người cùng xem một khung hội thoại chứa nguyên văn và bản dịch. Bấm **Bắt đầu nghe** và nói lần lượt; không có ô nhập A/B hay nút xoay màn hình.
-- **Hai máy riêng:** chủ phòng là A, người được mời là B; cả hai cần tài khoản riêng. Liên kết/QR dùng một lần và hết hạn sau 24 giờ. Phòng tối đa hai thành viên; hai máy có thể gửi giọng nói độc lập.
+- **Hai máy từ xa:** chủ phòng là A, người được mời là B; cả hai cần tài khoản riêng. Hai người có thể ở hai mạng Internet khác nhau, cùng mở URL HTTPS của ứng dụng. Liên kết/QR dùng một lần và hết hạn sau 24 giờ. Phòng tối đa hai thành viên; hai máy gửi giọng nói độc lập và cùng xem chữ/bản dịch. **Chưa có gọi thoại hoặc đọc bản dịch qua loa.** Hiển thị riêng trạng thái đối phương trực tuyến/ngoại tuyến/micro đang bật; micro đang bật không có nghĩa là đang nói.
 - **Ngôn ngữ:** Việt, Anh, Nhật, Hàn, Trung (bản dịch chữ giản thể), Pháp, Đức, Tây Ban Nha; mặc định Việt–Anh. Cặp ngôn ngữ và chế độ giữ cố định trong phòng.
 - **Micro:** nghe liên tục sau khi bấm bắt đầu. Khi chuyển ứng dụng, rời trang hoặc mất kết nối, micro dừng; cần bấm bắt đầu lại. Ở chế độ một máy chung, Nemotron tự nhận diện ngôn ngữ; chỉ gán A/B nếu tag ngôn ngữ nằm trong cặp ngôn ngữ của phòng. Nếu thiếu tag (thường ở câu bị cắt giữa chừng) hoặc nhận ra ngôn ngữ khác, ứng dụng sẽ yêu cầu chọn người nói A/B trước khi dịch câu đó. Ở chế độ hai máy, mỗi micro dùng prompt ngôn ngữ của phía đó. Nếu chưa cấp quyền hoặc không tìm thấy micro, hãy cấp quyền/kết nối micro rồi bấm bắt đầu lại. Không có ô nhập tin nhắn trong cả hai chế độ.
-- **Dễ đọc:** chữ giao diện chính từ 18px, chữ phụ từ 16px; nguyên văn 24px và bản dịch 32px trên máy tính (22px/28px trên điện thoại). Nút bấm tối thiểu cao 48px, nút micro 56px. Cỡ chữ dùng `rem` để theo thiết lập chữ của trình duyệt.
+- **Dễ đọc:** chữ giao diện chính từ 18px, chữ phụ từ 16px; nguyên văn và bản dịch cùng cỡ 24px trên máy tính, 22px trên điện thoại. Cỡ chữ dùng `rem` để theo thiết lập chữ của trình duyệt.
 - **Người nói:** dùng chung máy sẽ gán A/B theo ngôn ngữ, không nhận diện danh tính giọng nói. Câu thiếu độ tin cậy sẽ chờ chọn A/B trước khi dịch. Hai người cần nói lần lượt, tránh nói chồng trong cùng một micro.
 - **Lịch sử:** lưu chữ và bản dịch đến khi chủ phòng xóa toàn bộ hội thoại. Cả hai thành viên xem lại được. Âm thanh chỉ ở bộ nhớ trong quá trình xử lý, không ghi file hoặc lưu SQLite.
 
@@ -96,7 +96,21 @@ Giảm thời gian im lặng hoặc độ dài tối đa giúp dịch sớm hơn
 
 `WHISPER_*` chỉ còn áp dụng khi đặt `SPEECH_BACKEND=whisper` để quay lại backend cũ; mặc định không tự fallback nếu Nemotron lỗi. `SPEECH_ENABLED=false` tắt tải model. Khi thay model/config, khởi động lại backend; Docker cần rebuild nếu đổi dependency/code.
 
-WebSocket tự kết nối lại và lấy lại các câu đã tải theo ID, số thứ tự và phiên bản. Câu nhập gửi lại với cùng `client_message_id` chỉ được lưu một lần. Câu đang dịch khi backend khởi động lại chuyển thành lỗi có thể thử lại. Heartbeat giữ kết nối khi micro đang mở nhưng không có ai nói.
+WebSocket tự kết nối lại với backoff tối đa 10 giây và lấy lại các câu đã tải theo ID, số thứ tự và phiên bản. Câu nhập gửi lại với cùng `client_message_id` chỉ được lưu một lần; không loại bỏ các câu khác ID chỉ vì có nội dung giống nhau. Câu đang dịch khi backend khởi động lại chuyển thành lỗi có thể thử lại. Mặc định server ping mỗi 10 giây, quá 30 giây không nhận pong sẽ đóng kết nối và giải phóng micro; gói âm thanh không thay thế cho pong. Frontend cũng phát hiện thiếu heartbeat sau 30 giây và yêu cầu bật lại micro sau reconnect.
+
+Dừng micro được xác nhận ngay, không chờ ASR xong. Mỗi phía chỉ có tối đa hai phiên đã dừng còn đang xử lý; mở lại quá nhanh khi chúng chưa xong sẽ báo chờ. Sau 15 giây xử lý nốt, hệ thống yêu cầu hủy và báo phần lời nói có thể bị thiếu. Suy luận native đang chạy không thể bị ngắt an toàn ngay lập tức: giữ slot cho đến khi nó thực sự kết thúc, không mở thêm suy luận chồng lên. Gửi WebSocket xuống một máy bị treo cũng có timeout để không giữ khóa micro hoặc chặn cập nhật cho phía còn lại mãi.
+
+## Checklist triển khai và nghiệm thu hai máy từ xa
+
+1. Chạy **một backend worker/replica**. Hub, presence, khóa micro và hàng đợi ở bộ nhớ; không tăng worker để tăng tốc. Mở rộng nhiều process cần kho khóa/pub-sub dùng chung trước.
+2. Đặt reverse proxy HTTPS/WSS trước frontend hoặc dùng tunnel. Giữ `/api` và `/ws` cùng origin; chuyển tiếp WebSocket Upgrade, giữ Host công khai. Timeout proxy tối thiểu 60 giây. Không cần TURN/STUN vì chưa truyền cuộc gọi giữa hai máy.
+3. Trên HTTPS đặt `COOKIE_SECURE=true`, tạo lại backend và đăng nhập lại. Nếu cấu hình `ALLOWED_ORIGINS`, chỉ liệt kê origin HTTPS thực sự dùng (không wildcard). Không công khai cổng backend, database, model dịch hoặc API key.
+4. Mở đúng URL HTTPS công khai trên máy A **trước khi tạo lời mời**. `localhost`, IP LAN hoặc link HTTP không phải địa chỉ dùng từ mọi nơi. Cảnh báo trên giao diện chỉ nhận biết các địa chỉ nội bộ phổ biến, không kiểm chứng DNS/firewall/chứng chỉ. Quick Tunnel thay URL sau khi chạy lại; production nên dùng domain/tunnel cố định.
+5. Máy B mở link trên mạng khác, đăng nhập/đăng ký và bấm Vào phòng. Sau khi đã tham gia, mở lại phòng từ danh sách lịch sử thay vì dùng lại token một lần.
+6. Mỗi người nói đúng ngôn ngữ được ghi trên máy mình; A/B có thể bật micro cùng lúc. Mở thêm tab cùng tài khoản không được giành micro từ tab đang thu. Không dùng cách lọc câu giống nhau để loại trùng: người dùng có thể cố ý lặp lại câu.
+7. Mất mạng, mạng gửi quá chậm, chuyển ứng dụng hoặc khóa màn hình sẽ dừng micro; **không tự ghi âm lại**. Khi trở lại hãy bấm bắt đầu và nói lại phần chưa gửi. Âm thanh chưa được server nhận không được lưu/phát lại; bản chốt đã nhận vẫn có thể hoàn tất sau khi micro tắt.
+8. Thử trên hai điện thoại thật (Wi-Fi và 4G/5G): cả hai chiều dịch, cùng bật micro, tắt một bên không tắt bên kia, mất mạng và reconnect, chuyển nền, từ chối/cấp lại quyền micro, hết hạn lời mời, lỗi dịch và thử lại. Đối chiếu ID/số câu trong lịch sử, không chỉ nhìn phụ đề tạm.
+9. Ghi nhận thời gian từ lúc nói xong đến nguyên văn và bản dịch, kiểm tra chữ đúng ngôn ngữ; đo khi cả hai micro hoạt động. Test tự động dùng ASR/dịch giả lập không chứng minh độ chính xác model thật hoặc độ trễ Internet. Không cam kết dưới một giây.
 
 ## Phát triển không dùng Docker
 
@@ -168,6 +182,8 @@ Lệnh tải/dùng model local, nhận dạng 6 giây đầu và in nội dung, 
 - `POST /api/rooms/{id}/messages` với `{ "client_message_id": "uuid", "speaker": "A", "text": "Xin chào" }`. Ở phòng hai máy, backend xác định vai từ tài khoản và từ chối giả mạo vai người khác.
 - `POST /api/rooms/{id}/messages/{message_id}/retry`; `/speaker` với `{ "speaker": "B" }` cho câu chờ xác định người nói.
 - `GET /api/config` trả danh sách ngôn ngữ và trạng thái dịch/nhận dạng; không trả API key hay URL model.
-- `WS /ws/rooms/{id}?from_sequence=...`: xác thực bằng cookie; gửi JSON `audio.start`, `audio.stop`, `pong`, `text.submit`; âm thanh là gói nhị phân PCM little-endian. Nhận `room.snapshot`, `room.members`, `message.upsert`, `message.ack`, `transcript.partial`, `audio.state`, `ping`, `error`, `room.deleted`.
+- `WS /ws/rooms/{id}?from_sequence=...`: xác thực bằng cookie; gửi JSON `audio.start`, `audio.stop`, `pong`, `text.submit`; âm thanh là gói nhị phân PCM little-endian. Nhận `room.snapshot`, `room.members`, `room.presence`, `message.upsert`, `message.ack`, `transcript.partial`, `audio.state`, `ping`, `error`, `room.deleted`.
+- `room.snapshot.presence` và `room.presence.members` chứa mảng `{side, online, recording}` cho A/B. Đây là trạng thái tạm trong bộ nhớ, không phải số thành viên đã đăng ký vào phòng. Socket thực hiện thao tác nhận `audio.state`; các socket còn lại nhận cập nhật presence.
+- Client mới gửi `capture_id` (chuỗi 1–128 ký tự) với `audio.start` / `audio.stop`. Server echo mã trong `audio.state` và lỗi phiên thu; lệnh dừng sai mã bị bỏ qua, lệnh mở khác mã khi đang thu trả `capture_busy`. Client cũ vẫn được dùng toàn bộ phiên không có mã. PCM không chứa mã và chỉ thuộc phiên đang hoạt động của chính socket đó. Khi `audio.stop` đã được xác nhận, không gửi thêm PCM của phiên cũ.
 
 Mật khẩu được băm Argon2id; cookie HttpOnly, SameSite=Lax; session và token mời chỉ lưu SHA-256 trong SQLite. Backend kiểm tra origin và tư cách thành viên trên HTTP/WebSocket. Liên kết mời dùng fragment để mã mời không xuất hiện trong URL request/access log. API key dịch chỉ được dùng từ backend.

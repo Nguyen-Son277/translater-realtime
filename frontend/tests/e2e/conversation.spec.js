@@ -35,7 +35,7 @@ async function seedTranscriptMessage(page, side, text) {
   return response.json();
 }
 
-test('shared phone shows one voice transcript with larger translations', async ({ page }) => {
+test('shared phone shows one voice transcript with matching original and translated text font sizes', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await register(page);
   await create(page);
@@ -50,7 +50,7 @@ test('shared phone shows one voice transcript with larger translations', async (
   await expect(panel.getByText('Bạn khỏe không?', { exact: true })).toBeVisible();
   await expect(page.locator('[data-message-id]')).toHaveCount(2);
   for (const translation of await panel.locator('.message-translation').all()) {
-    await expect(translation).toHaveCSS('font-size', '28px');
+    await expect(translation).toHaveCSS('font-size', '22px');
   }
   await expect(page.locator('textarea[aria-label^="Tin nhắn người "]')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Bắt đầu nghe', exact: true })).toBeVisible();
@@ -58,7 +58,7 @@ test('shared phone shows one voice transcript with larger translations', async (
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.setViewportSize({ width: 1280, height: 800 });
   for (const translation of await panel.locator('.message-translation').all()) {
-    await expect(translation).toHaveCSS('font-size', '32px');
+    await expect(translation).toHaveCSS('font-size', '24px');
   }
   await expect(page.getByRole('log')).toHaveCount(1);
   await expect(panel.locator('.message-text.preferred')).toHaveCSS('font-size', '24px');
@@ -99,7 +99,7 @@ test('two signed-in phones join by invitation and exchange both directions', asy
     await expect(page.locator('[data-message-id]')).toHaveCount(2);
     await expect(page.locator('textarea[aria-label^="Tin nhắn người "]')).toHaveCount(0);
     await expect(page.locator('.message-text.preferred').first()).toHaveCSS('font-size', '22px');
-    await expect(page.locator('.message-translation').first()).toHaveCSS('font-size', '28px');
+    await expect(page.locator('.message-translation').first()).toHaveCSS('font-size', '22px');
   }
   await b.reload();
   await expect(b.getByText('Bạn khỏe không?', { exact: true })).toBeVisible();

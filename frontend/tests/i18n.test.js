@@ -43,6 +43,21 @@ test('i18n supported locales: supported codes and language metadata are correct'
   assert.equal(zh.formatLocale, 'zh-CN');
 });
 
+test('error localization: every UI notice has en and zh-CN translations', async () => {
+  const { readFileSync } = await import('node:fs');
+  for (const file of ['src/useMicrophone.js', 'src/useRoom.js']) {
+    const source = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
+    const literals = [...source.matchAll(/(?:setNotice|finish|new Error)\(\s*'([^']{15,})'/g)].map(match => match[1]);
+    assert.ok(literals.length > 0, `${file} should contain user-facing notices`);
+    for (const message of literals) {
+      const entry = errorMessages[message];
+      assert.ok(entry, `missing translation entry for: ${message.slice(0, 60)}`);
+      assert.ok(entry.en, `missing en translation for: ${message.slice(0, 60)}`);
+      assert.ok(entry['zh-CN'], `missing zh-CN translation for: ${message.slice(0, 60)}`);
+    }
+  }
+});
+
 test('error localization: known error messages are translated', () => {
   const networkError = 'Không kết nối được máy chủ. Nội dung của bạn vẫn được giữ lại.';
   assert.equal(errorMessages[networkError].en, 'Unable to connect to server. Your content has been preserved.');

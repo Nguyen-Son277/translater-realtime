@@ -1,0 +1,21 @@
+# docker compose -f compose.yaml -f compose.gpu.yaml up -d --build
+# Requires an NVIDIA driver compatible with PyTorch's CUDA runtime and
+# NVIDIA Container Toolkit on the host. Does not start a local translation LLM.
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.gpu
+    environment:
+      SPEECH_ENABLED: "true"
+      SPEECH_BACKEND: nemotron
+      SPEECH_DEVICE: cuda
+      TRANSLATION_BACKEND: openai
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

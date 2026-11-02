@@ -29,6 +29,7 @@ def test_registration_saves_normalized_profile_and_keeps_email_private(system):
     profile = response.json()
     assert profile == {
         "id": profile["id"], "username": "new_account", "name": "Nguyễn Sơn", "email": "son@example.com",
+        "is_guest": False, "is_admin": False, "must_change_password": False,
     }
     assert client.get("/api/auth/me").json() == profile
     room = client.post("/api/rooms", json={}).json()
@@ -132,7 +133,8 @@ def test_legacy_migration_preserves_accounts_sessions_and_conversations(tmp_path
     with TestClient(app) as client:
         client.cookies.set(COOKIE_NAME, token)
         assert client.get("/api/auth/me").json() == {
-            "id": "legacy", "username": "legacy", "name": "legacy", "email": None,
+            "id": "legacy", "username": "legacy", "name": "legacy", "email": None, "is_guest": False,
+            "is_admin": False, "must_change_password": False,
         }
         rooms = client.get("/api/rooms").json()
         assert [room["id"] for room in rooms] == ["old-room"]
@@ -145,6 +147,7 @@ def test_legacy_migration_preserves_accounts_sessions_and_conversations(tmp_path
             for user in db.scalars(select(User)):
                 assert user.name == user.username
                 assert user.email is None
+                assert user.is_guest is False
         response = client.patch("/api/auth/me", json={"email": "legacy@example.com"})
         assert response.status_code == 200
         assert response.json()["email"] == "legacy@example.com"
@@ -152,3 +155,39 @@ def test_legacy_migration_preserves_accounts_sessions_and_conversations(tmp_path
         assert login.status_code == 200
         assert login.json()["name"] == "legacy"
         assert login.json()["email"] == "legacy@example.com"
+
+
+def test_guest_migration_preserves_0002_profiles_and_has_false_server_default(tmp_path):
+    database = Database(f"sqlite:///{tmp_path / 'profile.db'}")
+    root = Path(__file__).resolve().parent.parent
+    config = Config(str(root / "alembic.ini"))
+    config.set_main_option("script_location", str(root / "migrations"))
+    hashed = passwords.hash("existing-password")
+    now = utcnow().isoformat(sep=" ")
+    try:
+        with database.engine.begin() as conn:
+            config.attributes["connection"] = conn
+            command.upgrade(config, "0002")
+            conn.execute(text("INSERT INTO users (id, username, name, email, password_hash, created_at) "
+                              "VALUES ('profile', 'profile', 'Tên riêng', 'profile@example.com', :hash, :now)"),
+                         {"hash": hashed, "now": now})
+            before = dict(conn.execute(text("SELECT * FROM users")).mappings().one())
+            command.upgrade(config, "0003")
+            after = dict(conn.execute(text("SELECT * FROM users")).mappings().one())
+            assert after == {**before, "is_guest": 0}
+            # SQL inserts, not just ORM defaults, continue to create ordinary accounts.
+            conn.execute(text("INSERT INTO users (id, username, password_hash, created_at) "
+                              "VALUES ('default', 'default', :hash, :now)"), {"hash": hashed, "now": now})
+            assert conn.scalar(text("SELECT is_guest FROM users WHERE id = 'default'")) == 0
+            assert conn.execute(text("PRAGMA foreign_key_check")).all() == []
+            command.downgrade(config, "0002")
+            assert dict(conn.execute(text("SELECT * FROM users WHERE id = 'profile'")).mappings().one()) == before
+            command.upgrade(config, "head")
+            assert conn.scalar(text("SELECT is_guest FROM users WHERE id = 'profile'")) == 0
+        with database.session() as db:
+            account = db.get(User, "profile")
+            assert account.name == "Tên riêng" and account.email == "profile@example.com"
+            assert account.is_guest is False
+            assert passwords.verify(account.password_hash, "existing-password")
+    finally:
+        database.engine.dispose()

@@ -1,0 +1,10 @@
+# Optional hardware Vulkan acceleration (Intel Arc/AMD); no privileged container.
+services:
+  translation:
+    environment:
+      TRANSLATION_GPU_LAYERS: "99"
+      # Arc A380 with a small PCI BAR: keep weights in actual device-local VRAM.
+      # Presence-based llama.cpp switch: remove this key to disable; do not set "0".
+      GGML_VK_DISABLE_HOST_VISIBLE_VIDMEM: "1"
+    devices:
+      - /dev/dri:/dev/dri

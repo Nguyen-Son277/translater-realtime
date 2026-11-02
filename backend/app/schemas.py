@@ -60,6 +60,41 @@ class EmailUpdate(BaseModel):
     email: EmailAddress
 
 
+class PasswordChange(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    current_password: str = Field(min_length=8, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+    new_password_confirmation: str = Field(min_length=8, max_length=128)
+
+    @model_validator(mode="after")
+    def matching_passwords(self):
+        if self.new_password != self.new_password_confirmation:
+            raise ValueError("Mật khẩu nhập lại chưa khớp.")
+        if self.new_password == self.current_password:
+            raise ValueError("Mật khẩu mới phải khác mật khẩu hiện tại.")
+        return self
+
+
+class AdminPasswordReset(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    new_password: str = Field(min_length=8, max_length=128)
+    new_password_confirmation: str = Field(min_length=8, max_length=128)
+
+    @model_validator(mode="after")
+    def matching_passwords(self):
+        if self.new_password != self.new_password_confirmation:
+            raise ValueError("Mật khẩu nhập lại chưa khớp.")
+        return self
+
+
+class AccountStatusUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    is_active: bool
+
+
 class RoomCreate(BaseModel):
     title: str = Field(default="", max_length=100)
     mode: Literal["shared", "remote"] = "shared"

@@ -41,6 +41,43 @@ export const errorMessages = {
     "zh-CN": "未能翻译该句。"
   },
 
+  // Client-side microphone and room lifecycle notices (rendered through localizeError)
+  "Chưa xác nhận được việc tắt micro. Đang kết nối lại; hãy bấm bắt đầu để nghe tiếp.": {
+    en: "Could not confirm that the microphone stopped. Reconnecting; press start to listen again.",
+    "zh-CN": "未能确认麦克风已关闭。正在重新连接，请点击开始聆听继续。",
+  },
+  "Micro đã dừng vì mất kết nối. Phần lời nói chưa gửi có thể bị mất; hãy nói lại sau khi kết nối và bấm bắt đầu.": {
+    en: "The microphone stopped because the connection was lost. Speech that was not sent may be missing; say that part again after reconnecting and press start.",
+    "zh-CN": "由于连接断开，麦克风已停止。尚未发送的语音可能会丢失；请在重新连接后重说该部分，并点击开始。",
+  },
+  "Micro đã dừng vì mạng chậm. Âm thanh chưa gửi không được phát lại; hãy kết nối lại rồi nói lại.": {
+    en: "The microphone stopped because the network is slow. Audio that was not sent is not replayed; reconnect and say it again.",
+    "zh-CN": "由于网络缓慢，麦克风已停止。未发送的音频不会被重放；请重新连接后再说一次。",
+  },
+  "Micro đã bị ngắt. Kiểm tra micro rồi bấm Bắt đầu nghe để thử lại.": {
+    en: "The microphone was disconnected. Check the microphone, then press Start listening to try again.",
+    "zh-CN": "麦克风已断开。请检查麦克风，然后点击开始聆听重试。",
+  },
+  "Chưa mở được phiên nhận giọng nói. Hãy thử lại.": {
+    en: "Could not open a speech recognition session. Please try again.",
+    "zh-CN": "未能开启语音识别会话，请重试。",
+  },
+  "Micro đã tạm dừng khi bạn chuyển ứng dụng hoặc khóa màn hình. Bấm bắt đầu để nghe tiếp.": {
+    en: "The microphone paused when you switched apps or locked the screen. Press start to keep listening.",
+    "zh-CN": "切换应用或锁屏时麦克风已暂停。请点击开始继续聆听。",
+  },
+  "Cuộc hội thoại không còn tồn tại.": {
+    en: "This conversation no longer exists.",
+    "zh-CN": "该对话已不存在。",
+  },
+  "Phiên đăng nhập đã hết hạn.": {
+    en: "Your session has expired.",
+    "zh-CN": "登录会话已过期。",
+  },
+  "Bạn không có quyền kết nối phòng từ địa chỉ này.": {
+    en: "You are not allowed to connect to this room from this address.",
+    "zh-CN": "您无权从该地址连接此房间。",
+  },
   // Backend HTTP & WebSocket errors
   "Nguồn yêu cầu không được phép.": {
     en: "Origin not allowed.",
@@ -61,6 +98,38 @@ export const errorMessages = {
   "Vui lòng đăng nhập để tiếp tục.": {
     en: "Please sign in to continue.",
     "zh-CN": "请登录以继续。"
+  },
+  "Tài khoản khách không được thực hiện thao tác này.": {
+    en: "Guest sessions cannot perform this action.",
+    "zh-CN": "访客会话无法执行此操作。"
+  },
+  "Bạn không có quyền quản trị.": {
+    en: "You do not have administrator permission.",
+    "zh-CN": "您没有管理员权限。"
+  },
+  "Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên.": {
+    en: "This account has been locked. Please contact an administrator.",
+    "zh-CN": "该账户已被锁定。请联系管理员。"
+  },
+  "Mật khẩu hiện tại chưa đúng.": {
+    en: "Current password is incorrect.",
+    "zh-CN": "当前密码不正确。"
+  },
+  "Mật khẩu mới phải khác mật khẩu hiện tại.": {
+    en: "New password must be different from the current password.",
+    "zh-CN": "新密码必须与当前密码不同。"
+  },
+  "Tài khoản khách không có mật khẩu.": {
+    en: "Guest accounts do not have a password.",
+    "zh-CN": "访客账户没有密码。"
+  },
+  "Không thể thao tác trên tài khoản quản trị.": {
+    en: "Cannot perform this action on an administrator account.",
+    "zh-CN": "无法对管理员账户执行此操作。"
+  },
+  "Không tìm thấy tài khoản.": {
+    en: "Account not found.",
+    "zh-CN": "未找到该账户。"
   },
   "Email đã được sử dụng.": {
     en: "Email is already in use.",

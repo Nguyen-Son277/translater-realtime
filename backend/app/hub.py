@@ -135,6 +135,25 @@ class Hub:
             except DISCONNECTED:
                 pass
 
+    async def close_user(self, user_id):
+        connections = [c for room in self.rooms.values() for c in room if c.user_id == user_id]
+        for connection in connections:
+            self.remove(connection)
+            try:
+                await connection.close(4401)
+            except DISCONNECTED:
+                pass
+
+    async def close_user_except(self, user_id, keep_digest):
+        connections = [c for room in self.rooms.values() for c in room
+                       if c.user_id == user_id and c.session_digest != keep_digest]
+        for connection in connections:
+            self.remove(connection)
+            try:
+                await connection.close(4401)
+            except DISCONNECTED:
+                pass
+
     async def close_room(self, room_id):
         for connection in tuple(self.rooms.get(room_id, ())):
             self.remove(connection)

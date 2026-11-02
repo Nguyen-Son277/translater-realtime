@@ -22,15 +22,19 @@ from pydantic import ValidationError
 from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 
+from app.admin import create_admin_router
 from app.auth import (
     COOKIE_NAME,
     create_session,
+    current_account,
     current_user,
     digest_token,
     find_user,
+    optional_user,
     origin_allowed,
     passwords,
     require_room,
+    revoke_sessions,
     room_dict,
     user_dict,
     verify_password,
@@ -44,6 +48,7 @@ from app.schemas import (
     Credentials,
     EmailUpdate,
     JoinRoom,
+    PasswordChange,
     Registration,
     RoomCreate,
     TextMessage,
@@ -149,29 +154,31 @@ def create_app(settings=None, recognizer=None, translator=None):
                 db.commit()
             except IntegrityError as exc:
                 raise HTTPException(409, "Tên đăng nhập hoặc email đã được sử dụng.") from exc
-            return user_dict(user)
+            return user_dict(user, settings)
 
     @app.post("/api/auth/login")
     async def login(body: Credentials, request: Request, response: Response):
         auth_rate_limit(request)
         with database.session() as db:
-            user = db.scalar(select(User).where(User.username == body.username))
+            user = db.scalar(select(User).where(User.username == body.username, User.is_guest.is_(False)))
             # Always verify a real hash to keep the unknown-user path comparable.
             if not user:
                 await asyncio.to_thread(passwords.hash, body.password)
                 raise HTTPException(401, "Tên đăng nhập hoặc mật khẩu chưa đúng.")
             if not await asyncio.to_thread(verify_password, body.password, user.password_hash):
                 raise HTTPException(401, "Tên đăng nhập hoặc mật khẩu chưa đúng.")
+            if not user.is_active:
+                raise HTTPException(403, "Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên.")
             create_session(db, user.id, settings, response)
             db.commit()
-            return user_dict(user)
+            return user_dict(user, settings)
 
     @app.get("/api/auth/me")
     def me(user=Depends(current_user)):
-        return user_dict(user)
+        return user_dict(user, settings)
 
     @app.patch("/api/auth/me")
-    def update_email(body: EmailUpdate, user=Depends(current_user)):
+    def update_email(body: EmailUpdate, user=Depends(current_account)):
         with database.session() as db:
             account = db.get(User, user.id)
             if account is None:
@@ -181,7 +188,34 @@ def create_app(settings=None, recognizer=None, translator=None):
                 db.commit()
             except IntegrityError as exc:
                 raise HTTPException(409, "Email đã được sử dụng.") from exc
-            return user_dict(account)
+            return user_dict(account, settings)
+
+    @app.post("/api/auth/password")
+    async def change_password(body: PasswordChange, request: Request,
+                              user=Depends(current_account)):
+        auth_rate_limit(request)
+        if not await asyncio.to_thread(verify_password, body.current_password, user.password_hash):
+            raise HTTPException(403, "Mật khẩu hiện tại chưa đúng.")
+        hashed = await asyncio.to_thread(passwords.hash, body.new_password)
+        keep = digest_token(request.cookies.get(COOKIE_NAME, ""))
+        with database.session() as db:
+            # Verification/hashing yields to other requests. Do not overwrite an
+            # intervening reset/change, or accept a session revoked while hashing.
+            valid_session = select(Session.digest).where(
+                Session.digest == keep, Session.user_id == user.id,
+                Session.expires_at > utcnow(),
+            ).exists()
+            changed = db.execute(update(User).where(
+                User.id == user.id, User.is_active.is_(True),
+                User.password_hash == user.password_hash, valid_session,
+            ).values(password_hash=hashed, must_change_password=False))
+            if changed.rowcount != 1:
+                raise HTTPException(401, "Vui lòng đăng nhập để tiếp tục.")
+            revoke_sessions(db, user.id, keep_digest=keep)
+            db.commit()
+            result = user_dict(db.get(User, user.id), settings)
+        await hub.close_user_except(user.id, keep)
+        return result
 
     @app.post("/api/auth/logout", status_code=204)
     async def logout(request: Request, response: Response):
@@ -204,7 +238,7 @@ def create_app(settings=None, recognizer=None, translator=None):
             return [room_dict(db, room, member) for room, member in rows]
 
     @app.post("/api/rooms", status_code=201)
-    def create_room(body: RoomCreate, user=Depends(current_user)):
+    def create_room(body: RoomCreate, user=Depends(current_account)):
         with database.session() as db:
             room = Room(owner_id=user.id, title=body.title.strip() or "Cuộc trò chuyện mới",
                         mode=body.mode, language_a=body.language_a, language_b=body.language_b)
@@ -216,23 +250,42 @@ def create_app(settings=None, recognizer=None, translator=None):
             return room_dict(db, room, member)
 
     @app.post("/api/rooms/join")
-    async def join_room(body: JoinRoom, user=Depends(current_user)):
+    async def join_room(body: JoinRoom, request: Request, response: Response,
+                        user=Depends(optional_user)):
+        auth_rate_limit(request)
+        invite_digest = digest_token(body.token)
+        invalid_invite = "Lời mời không hợp lệ hoặc đã hết hạn. Hãy xin liên kết mới."
         with database.session() as db:
-            room = db.scalar(select(Room).where(Room.invite_digest == digest_token(body.token)))
-            if not room or room.mode != "remote" or room.invite_expires_at < utcnow():
-                raise HTTPException(404, "Lời mời không hợp lệ hoặc đã hết hạn. Hãy xin liên kết mới.")
-            member = db.scalar(select(Membership).where(
-                Membership.room_id == room.id, Membership.user_id == user.id,
-            ))
-            if member:
-                return room_dict(db, room, member)
-            member = Membership(room_id=room.id, user_id=user.id, side="B")
-            db.add(member)
-            room.invite_digest = None
-            room.invite_expires_at = None
+            room = db.scalar(select(Room).where(Room.invite_digest == invite_digest))
+            if (not room or room.mode != "remote" or room.invite_expires_at is None
+                    or room.invite_expires_at <= utcnow()):
+                raise HTTPException(404, invalid_invite)
+            if user:
+                member = db.scalar(select(Membership).where(
+                    Membership.room_id == room.id, Membership.user_id == user.id,
+                ))
+                if member:
+                    return room_dict(db, room, member)
             try:
+                # Claim the still-valid invitation before allocating an identity. The
+                # conditional write also protects against joins/rotation in other workers.
+                claimed = db.execute(update(Room).where(
+                    Room.id == room.id, Room.mode == "remote",
+                    Room.invite_digest == invite_digest, Room.invite_expires_at > utcnow(),
+                ).values(invite_digest=None, invite_expires_at=None))
+                if claimed.rowcount != 1:
+                    raise HTTPException(404, invalid_invite)
+                if user is None:
+                    user = User(username="guest_" + secrets.token_hex(13), name="Khách",
+                                email=None, password_hash="!guest", is_guest=True)
+                    db.add(user)
+                    db.flush()
+                    create_session(db, user.id, settings, response)
+                member = Membership(room_id=room.id, user_id=user.id, side="B")
+                db.add(member)
                 db.commit()
             except IntegrityError as exc:
+                db.rollback()
                 raise HTTPException(409, "Phòng đã có đủ hai người.") from exc
             result = room_dict(db, room, member)
         await hub.broadcast(room.id, {"type": "room.members", "members": result["members"]})
@@ -245,7 +298,7 @@ def create_app(settings=None, recognizer=None, translator=None):
             return room_dict(db, room, member)
 
     @app.post("/api/rooms/{room_id}/invite")
-    def invite(room_id: str, user=Depends(current_user)):
+    def invite(room_id: str, user=Depends(current_account)):
         with database.session() as db:
             room, _ = require_room(db, room_id, user.id)
             if room.owner_id != user.id or room.mode != "remote":
@@ -259,7 +312,7 @@ def create_app(settings=None, recognizer=None, translator=None):
             return {"token": token, "expires_at": room.invite_expires_at.isoformat() + "Z"}
 
     @app.delete("/api/rooms/{room_id}", status_code=204)
-    async def delete_room(room_id: str, user=Depends(current_user)):
+    async def delete_room(room_id: str, user=Depends(current_account)):
         with database.session() as db:
             room, _ = require_room(db, room_id, user.id)
             if room.owner_id != user.id:
@@ -479,6 +532,7 @@ def create_app(settings=None, recognizer=None, translator=None):
                     hub.drain_capture(connection, room.mode, stream, flush=False)
                 await hub.broadcast_presence(room_id)
 
+    app.include_router(create_admin_router(settings, database, hub, auth_rate_limit))
     return app
 
 

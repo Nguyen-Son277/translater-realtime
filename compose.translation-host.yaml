@@ -1,0 +1,5 @@
+# Optional: expose model only to a native backend on this host, never to LAN.
+services:
+  translation:
+    ports:
+      - "127.0.0.1:8081:8081"

@@ -1,0 +1,29 @@
+# Add to compose.yaml to enable the local model. Never exposes the model to LAN.
+services:
+  backend:
+    environment:
+      TRANSLATION_BACKEND: translategemma
+      TRANSLATION_BASE_URL: http://translation:8081
+      TRANSLATION_MODEL: translategemma-4b-it
+      TRANSLATION_API_KEY: ""
+      TRANSLATION_CONCURRENCY: "1"
+  translation:
+    build: ./deploy/translation
+    restart: unless-stopped
+    environment:
+      TRANSLATION_GPU_LAYERS: "0"
+      LLAMA_ARG_SWA_FULL: "1"
+    volumes:
+      - type: bind
+        source: ./models/translation/translategemma-4b-it-Q4_K_M.gguf
+        target: /models/translategemma-4b-it-Q4_K_M.gguf
+        read_only: true
+        bind:
+          create_host_path: false
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, http://127.0.0.1:8081/health]
+      interval: 10s
+      timeout: 5s
+      start_period: 120s
+      retries: 6
+    stop_grace_period: 30s

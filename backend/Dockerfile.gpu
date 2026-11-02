@@ -1,0 +1,29 @@
+FROM python:3.12-slim-bookworm
+
+# The Linux PyPI torch wheel installs its matching CUDA runtime dependencies.
+# Do not install the CPU wheel first. The host supplies the NVIDIA driver via
+# NVIDIA Container Toolkit; no host CUDA toolkit is required.
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PIP_NO_CACHE_DIR=1 \
+    SPEECH_ENABLED=true SPEECH_BACKEND=nemotron SPEECH_DEVICE=cuda \
+    SPEECH_MODEL=nvidia/nemotron-3.5-asr-streaming-0.6b \
+    SPEECH_DOWNLOAD_ROOT=/models HF_HOME=/models/huggingface \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --uid 10001 app \
+    && mkdir -p /data /models && chown app:app /data /models
+COPY requirements.txt requirements.lock ./
+RUN pip install --index-url https://pypi.org/simple -r requirements.lock \
+    && pip check \
+    && python -c "import torch; assert torch.version.cuda is not None, 'CUDA-enabled PyTorch is required'; print('PyTorch', torch.__version__, 'CUDA', torch.version.cuda)"
+COPY --chown=app:app app ./app
+COPY --chown=app:app migrations ./migrations
+COPY --chown=app:app scripts ./scripts
+COPY --chown=app:app alembic.ini ./
+USER app
+EXPOSE 8000
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--proxy-headers", "--forwarded-allow-ips", "*", "--ws-max-size", "65536"]
+
+# Start with compose.yaml + compose.gpu.yaml: a Dockerfile alone cannot grant GPU access.
+# This image targets Nemotron/PyTorch, not the optional CTranslate2/Whisper CUDA runtime.

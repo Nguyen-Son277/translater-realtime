@@ -1,6 +1,6 @@
 import { ArrowRight, ArrowUpRight, AudioLines, Eye, EyeOff, Globe2, LockKeyhole, Sparkles } from 'lucide-react';
 import { useState } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../auth';
 import { Brand } from '../components';
@@ -17,7 +17,7 @@ export function AuthPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const from = location.state?.from?.startsWith('/') && !location.state.from.startsWith('//') ? location.state.from : '/';
-  if (!loading && user) return <Navigate to={from} replace />;
+  if (!loading && user && !user.is_guest) return <Navigate to={user.must_change_password ? '/change-password' : from} replace />;
   const submit = async event => {
     event.preventDefault(); setError('');
     const form = new FormData(event.currentTarget);
@@ -35,7 +35,7 @@ export function AuthPage() {
             }
           : { username: form.get('username'), password: form.get('password') },
       });
-      setUser(account); navigate(from, { replace: true });
+      setUser(account); navigate(account.must_change_password ? '/change-password' : from, { replace: true });
     } catch (err) { setError(err.message); }
     finally { setBusy(false); }
   };
@@ -57,7 +57,7 @@ export function AuthPage() {
     <section className="auth-form-side">
       <div className="auth-mobile-brand"><Brand /></div>
       <div className="auth-form-wrap">
-        <div className="auth-lang-row"><LanguageSelector /></div>
+        <div className="auth-lang-row"><Link className="text-button" to="/guide">{t('guide.nav')}</Link><LanguageSelector /></div>
         <span className="section-kicker">{t('auth.welcome')}</span>
         <h2>{register ? t('auth.registerTitle') : t('auth.loginTitle')}</h2>
         <p className="muted">{register ? t('auth.registerIntro') : t('auth.loginIntro')}</p>

@@ -1,5 +1,5 @@
-import { ArrowUpRight, AudioLines, LogOut, MessageCircleMore, Settings, X } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { ArrowUpRight, AudioLines, BookOpen, LogOut, MessageCircleMore, Settings, ShieldCheck, X } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from './api';
 import { useAuth } from './auth';
@@ -16,6 +16,8 @@ export function Brand({ light = false }) {
 export function Header() {
   const { t, localizeError } = useI18n();
   const { user, setUser, logout } = useAuth();
+  const location = useLocation();
+  const loginState = { from: location.pathname + location.search + location.hash };
   const [error, setError] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
@@ -25,19 +27,23 @@ export function Header() {
       <span className="header-tagline private-badge"><AudioLines size={14} /> <span>{t('common.tagline')}</span></span>
     </div>
     <div className="header-right">
-      <LanguageSelector />
-      <div className="header-divider" aria-hidden="true" />
-      <div className="header-user-group">
-        <span className="user-chip" title={user.name || user.username}>
-          <span className="avatar">{(user.name || user.username)[0].toUpperCase()}</span>
-          <span className="user-name">{user.name || user.username}</span>
-        </span>
-        <button className="icon-btn header-action-btn" aria-label={t('common.settings')} title={t('common.settings')} onClick={() => setSettingsOpen(true)}><Settings size={18} /></button>
-        <button className="icon-btn header-action-btn" aria-label={t('common.logout')} title={error ? localizeError(error) : t('common.logout')} onClick={() => logout().catch(err => setError(err.message))}><LogOut size={18} /></button>
+      <div className="header-lang-group">
+        {user?.is_admin && <Link className="header-guide-btn" to="/admin" aria-label={t('common.adminNav')} title={t('common.adminNav')}><ShieldCheck size={19} /></Link>}
+        <Link className="header-guide-btn" to="/guide" aria-label={t('guide.nav')} title={t('guide.nav')}><BookOpen size={19} /></Link>
+        <LanguageSelector />
       </div>
+      <div className="header-divider" aria-hidden="true" />
+      {user ? <div className="header-user-group">
+        <span className="user-chip" title={user.is_guest ? t('common.guest') : user.name || user.username}>
+          <span className="avatar">{(user.is_guest ? t('common.guest') : user.name || user.username)[0].toUpperCase()}</span>
+          <span className="user-name">{user.is_guest ? t('common.guest') : user.name || user.username}</span>
+        </span>
+        {user.is_guest ? <Link className="text-button" to="/login" state={loginState}>{t('auth.login')}</Link> : <button className="icon-btn header-action-btn" aria-label={t('common.settings')} title={t('common.settings')} onClick={() => setSettingsOpen(true)}><Settings size={18} /></button>}
+        <button className="icon-btn header-action-btn" aria-label={t('common.logout')} title={error ? localizeError(error) : t('common.logout')} onClick={() => logout().catch(err => setError(err.message))}><LogOut size={18} /></button>
+      </div> : <Link className="text-button" to="/login" state={loginState}>{t('auth.login')}</Link>}
       {error && <span role="alert" className="header-error">{localizeError(error)}</span>}
     </div>
-    {settingsOpen && <AccountSettings user={user} onSaved={setUser} onClose={closeSettings} />}
+    {settingsOpen && user && !user.is_guest && <AccountSettings user={user} onSaved={setUser} onClose={closeSettings} />}
   </header>;
 }
 
@@ -68,6 +74,7 @@ function AccountSettings({ user, onSaved, onClose }) {
       {saved && <p className="form-success" role="status">{t('common.emailSaved')}</p>}
       <button className="btn btn-primary full-width mt-5" disabled={busy || email.trim().toLowerCase() === (user.email || '')}>{busy ? <span className="spinner" /> : t('common.save')}</button>
     </form>
+    <Link className="btn btn-secondary full-width mt-5" to="/change-password" onClick={onClose}>{t('common.changePassword')}</Link>
   </Modal>;
 }
 

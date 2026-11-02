@@ -214,23 +214,33 @@ test('superseded room fetch cannot open an orphan socket after reconnect', async
   } finally { await aContext.close(); await bContext.close(); }
 });
 
-test('remote invitation survives login reload and warns about non-public URLs', async ({ browser }) => {
+test('public invitation survives reload and guest microphone works without sign-in', async ({ browser }) => {
   const aContext = await browser.newContext(), bContext = await browser.newContext();
   try {
-    await account(aContext); const username = await account(bContext);
+    await account(aContext);
     const room = await (await aContext.request.post('/api/rooms', { data: { mode: 'remote', title: 'Mời từ xa', language_a: 'vi', language_b: 'en' } })).json();
     const a = await aContext.newPage(); await a.goto(`/rooms/${room.id}`);
     await a.getByRole('button', { name: 'Mời bạn' }).click();
     await expect(a.getByRole('note')).toContainText('HTTPS công khai');
+    await expect(a.getByText('Người tham gia không cần đăng nhập.', { exact: false })).toBeVisible();
     const invitation = await a.getByLabel('Liên kết mời').inputValue();
-    await bContext.clearCookies();
-    const b = await bContext.newPage(); await b.goto(invitation); await b.reload();
-    await b.getByLabel('Tên đăng nhập', { exact: true }).fill(username);
-    await b.locator('#password').fill('test-password-123');
-    await b.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
+    const b = await bContext.newPage(); await prepare(b);
+    await b.goto(invitation); await b.reload();
     await expect(b.getByLabel('Liên kết hoặc mã mời')).not.toHaveValue('');
+    await expect(b.getByLabel('Tên đăng nhập', { exact: true })).toHaveCount(0);
     await b.getByRole('button', { name: 'Vào phòng', exact: true }).click();
     await expect(b.getByRole('status')).toHaveText('Đã kết nối');
     await expect(b.getByText('Chỉ dịch bằng chữ, chưa có gọi thoại.', { exact: false })).toBeVisible();
+    expect((await (await bContext.request.get('/api/auth/me')).json()).is_guest).toBe(true);
+    await start(b).click(); await expect(stop(b)).toBeVisible();
+    await expect(a.getByTestId('peer-presence')).toContainText('Micro đang bật');
+    await stop(b).click(); await expect(start(b)).toBeEnabled();
+    await b.reload(); await expect(b.getByRole('status')).toHaveText('Đã kết nối');
+    await b.getByRole('link', { name: 'Về danh sách hội thoại' }).click();
+    await expect(b.getByRole('button', { name: 'Tạo cuộc trò chuyện', exact: true })).toHaveCount(0);
+    await expect(b.getByRole('button', { name: 'Cài đặt tài khoản' })).toHaveCount(0);
+    await expect(b.getByText('Mời từ xa', { exact: true })).toBeVisible();
+    await b.getByRole('link', { name: 'Đăng nhập', exact: true }).click();
+    await expect(b.getByLabel('Tên đăng nhập', { exact: true })).toBeVisible();
   } finally { await aContext.close(); await bContext.close(); }
 });

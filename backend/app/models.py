@@ -1,7 +1,18 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    false,
+    true,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -28,6 +39,11 @@ class User(Base):
     name: Mapped[str] = mapped_column(String(100), server_default="")
     email: Mapped[str | None] = mapped_column(String(254), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(256))
+    is_guest: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=false())
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=true())
+    must_change_password: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false(),
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 

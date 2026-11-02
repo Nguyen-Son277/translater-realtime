@@ -5,8 +5,8 @@ from urllib.parse import urlparse
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
-from fastapi import HTTPException, Request, Response
-from sqlalchemy import select
+from fastapi import Depends, HTTPException, Request, Response
+from sqlalchemy import delete, select
 
 from app.models import Membership, Room, Session, User, utcnow
 
@@ -41,19 +41,64 @@ def find_user(database, token: str | None) -> User | None:
         session = db.get(Session, digest_token(token))
         if not session or session.expires_at <= utcnow():
             return None
-        return db.get(User, session.user_id)
+        user = db.get(User, session.user_id)
+        if not user or not user.is_active:
+            return None
+        return user
+
+
+def optional_user(request: Request) -> User | None:
+    return find_user(request.app.state.database, request.cookies.get(COOKIE_NAME))
 
 
 def current_user(request: Request) -> User:
-    user = find_user(request.app.state.database, request.cookies.get(COOKIE_NAME))
+    user = optional_user(request)
     if not user:
         raise HTTPException(401, "Vui lòng đăng nhập để tiếp tục.")
     return user
 
 
-def user_dict(user: User) -> dict:
+def current_account(user: User = Depends(current_user)) -> User:
+    if user.is_guest:
+        raise HTTPException(403, "Tài khoản khách không được thực hiện thao tác này.")
+    return user
+
+
+def is_admin(user: User, settings) -> bool:
+    return bool(
+        user and not user.is_guest
+        and user.username.lower() in settings.admin_usernames_set
+    )
+
+
+def current_admin(request: Request, user: User = Depends(current_user)) -> User:
+    if not is_admin(user, request.app.state.settings):
+        raise HTTPException(403, "Bạn không có quyền quản trị.")
+    return user
+
+
+def user_dict(user: User, settings) -> dict:
     return {"id": user.id, "username": user.username,
-            "name": user.name or user.username, "email": user.email}
+            "name": user.name or user.username, "email": user.email, "is_guest": user.is_guest,
+            "is_admin": is_admin(user, settings),
+            "must_change_password": user.must_change_password}
+
+
+def admin_account_dict(user: User, settings, session_count: int = 0, room_count: int = 0) -> dict:
+    return {
+        **user_dict(user, settings),
+        "is_active": user.is_active,
+        "created_at": user.created_at.isoformat() + "Z",
+        "session_count": session_count,
+        "room_count": room_count,
+    }
+
+
+def revoke_sessions(db, user_id: str, keep_digest: str | None = None) -> None:
+    statement = delete(Session).where(Session.user_id == user_id)
+    if keep_digest:
+        statement = statement.where(Session.digest != keep_digest)
+    db.execute(statement)
 
 
 def create_session(db, user_id: str, settings, response: Response) -> None:

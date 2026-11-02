@@ -66,7 +66,7 @@ test('shared phone shows one voice transcript with matching original and transla
   await expect(page.locator('body')).toHaveCSS('font-size', '18px');
 });
 
-test('two signed-in phones join by invitation and exchange both directions', async ({ browser }) => {
+for (const signedIn of [false, true]) test(`two phones exchange both directions with ${signedIn ? 'a signed-in member' : 'an anonymous guest'}`, async ({ browser }) => {
   const first = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const second = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const a = await first.newPage(), b = await second.newPage();
@@ -75,15 +75,9 @@ test('two signed-in phones join by invitation and exchange both directions', asy
   await expect(a.getByRole('img', { name: 'QR tham gia phòng Song Ngữ' })).toBeVisible();
   const invitation = await a.getByLabel('Liên kết mời').inputValue();
   await a.getByRole('button', { name: 'Đóng', exact: true }).click();
+  if (signedIn) await register(b);
   await b.goto(invitation);
-  await b.getByRole('tab', { name: 'Tạo tài khoản' }).click();
-  const guestUsername = accountName();
-  await b.getByLabel('Tên đăng nhập', { exact: true }).fill(guestUsername);
-  await b.getByLabel('Họ và tên', { exact: true }).fill(guestUsername);
-  await b.getByLabel('Email', { exact: true }).fill(`${guestUsername}@example.com`);
-  await b.locator('#password').fill('test-password-123');
-  await b.getByLabel('Nhập lại mật khẩu', { exact: true }).fill('test-password-123');
-  await b.getByRole('button', { name: 'Tạo tài khoản', exact: true }).click();
+  await expect(b.getByRole('tab', { name: 'Tạo tài khoản' })).toHaveCount(0);
   await expect(b.getByRole('heading', { name: 'Cùng một cuộc trò chuyện.' })).toBeVisible();
   await b.getByRole('button', { name: 'Vào phòng', exact: true }).click();
   await expect(b.getByRole('status')).toHaveText('Đã kết nối');

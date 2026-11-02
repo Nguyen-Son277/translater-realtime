@@ -33,8 +33,13 @@ class Settings(BaseSettings):
     session_days: int = Field(default=7, ge=1, le=30)
     allowed_origins: str = ""
     auth_rate_limit: int = Field(default=60, ge=1)
+    # Comma-separated usernames that may manage accounts. The bare "admin" account
+    # is bootstrapped by default so the admin page is usable without extra setup.
+    admin_usernames: str = "admin"
     ws_ping_interval: float = Field(default=10.0, ge=0.01, le=60.0)
     ws_pong_deadline: float = Field(default=30.0, ge=0.01, le=120.0)
+    # The existing LLM gateway is the default; local inference is explicitly opt-in.
+    translation_backend: Literal["openai", "translategemma"] = "openai"
     translation_base_url: str = ""
     translation_model: str = ""
     translation_api_key: str = ""
@@ -61,6 +66,10 @@ class Settings(BaseSettings):
     @property
     def trusted_origins(self) -> set[str]:
         return {origin.strip().rstrip("/") for origin in self.allowed_origins.split(",") if origin.strip()}
+
+    @property
+    def admin_usernames_set(self) -> set[str]:
+        return {name.strip().lower() for name in self.admin_usernames.split(",") if name.strip()}
 
     def prepare_directories(self) -> None:
         if self.database_url.startswith("sqlite:///") and ":memory:" not in self.database_url:

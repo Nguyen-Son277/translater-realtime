@@ -1,7 +1,9 @@
 import { common } from './common.js';
 import { room } from './room.js';
 import { join } from './join.js';
+import { admin } from './admin.js';
 import { errorMessages } from './errors.js';
+import { guide } from './guide.js';
 
 const extra = {
   vi: {
@@ -34,9 +36,9 @@ export const SUPPORTED_LOCALES = [
 ];
 
 export const translations = {
-  vi: { ...common.vi, ...room.vi, ...join.vi, ...extra.vi },
-  en: { ...common.en, ...room.en, ...join.en, ...extra.en },
-  'zh-CN': { ...common['zh-CN'], ...room['zh-CN'], ...join['zh-CN'], ...extra['zh-CN'] },
+  vi: { ...common.vi, ...room.vi, ...join.vi, ...admin.vi, ...extra.vi, ...guide.vi },
+  en: { ...common.en, ...room.en, ...join.en, ...admin.en, ...extra.en, ...guide.en },
+  'zh-CN': { ...common['zh-CN'], ...room['zh-CN'], ...join['zh-CN'], ...admin['zh-CN'], ...extra['zh-CN'], ...guide['zh-CN'] },
 };
 
 export { errorMessages };

@@ -6,6 +6,7 @@ import { I18nProvider, useI18n } from './i18n';
 import { AuthPage } from './pages/AuthPage';
 import { Dashboard } from './pages/Dashboard';
 import { AdminAccountsPage } from './pages/AdminAccountsPage';
+import { AdminSettingsPage } from './pages/AdminSettingsPage';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { GuideArticlePage } from './pages/GuideArticlePage';
 import { GuideIndexPage } from './pages/GuideIndexPage';
@@ -23,6 +24,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <Route path="/login" element={<AuthPage />} />
     <Route path="/" element={<RequireAuth><Dashboard /></RequireAuth>} />
     <Route path="/admin" element={<RequireAuth><RequireAdmin><AdminAccountsPage /></RequireAdmin></RequireAuth>} />
+    <Route path="/admin/settings" element={<RequireAuth><RequireAdmin><AdminSettingsPage /></RequireAdmin></RequireAuth>} />
     <Route path="/change-password" element={<RequireAuth><ChangePasswordPage /></RequireAuth>} />
     <Route path="/join" element={<JoinPage />} />
     <Route path="/guide" element={<GuideIndexPage />} />

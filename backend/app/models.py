@@ -40,11 +40,21 @@ class User(Base):
     email: Mapped[str | None] = mapped_column(String(254), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(256))
     is_guest: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=false())
+    is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=false())
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=true())
     must_change_password: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=false(),
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class TranslationSettings(Base):
+    __tablename__ = "translation_settings"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    base_url: Mapped[str] = mapped_column(String(2048), default="", server_default="")
+    model: Mapped[str] = mapped_column(String(200), default="", server_default="")
+    api_key_encrypted: Mapped[str | None] = mapped_column(Text)
+    revision: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
 
 class Session(Base):

@@ -5,22 +5,17 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from pydantic import ValidationError
 
 from app.config import LANGUAGES, Settings
 from app.nemotron import LOCALES, NemotronRecognizer
-from app.speech import WhisperRecognizer, create_recognizer
+from app.speech import create_recognizer
 
 
-def test_default_backend_and_explicit_whisper_fallback():
+def test_nemotron_is_the_only_recognizer():
     settings = Settings(_env_file=None)
     assert isinstance(create_recognizer(settings), NemotronRecognizer)
     assert settings.speech_model == "nvidia/nemotron-3.5-asr-streaming-0.6b"
     assert set(LANGUAGES) <= set(LOCALES)
-    assert isinstance(create_recognizer(Settings(_env_file=None, speech_backend="whisper")),
-                      WhisperRecognizer)
-    with pytest.raises(ValidationError):
-        Settings(_env_file=None, speech_backend="typo")
 
 
 @pytest.fixture

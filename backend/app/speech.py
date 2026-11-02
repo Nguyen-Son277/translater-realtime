@@ -5,7 +5,6 @@ import uuid
 from collections import deque
 from dataclasses import dataclass
 
-import numpy as np
 import webrtcvad
 
 logger = logging.getLogger(__name__)
@@ -78,47 +77,7 @@ class SpeechRecognizer:
             await asyncio.gather(self.initializing, return_exceptions=True)
 
 
-class WhisperRecognizer(SpeechRecognizer):
-    def load_sync(self):
-        from faster_whisper import WhisperModel
-
-        return WhisperModel(
-            self.settings.whisper_model, device=self.settings.whisper_device,
-            compute_type=self.settings.whisper_compute_type,
-            cpu_threads=self.settings.whisper_cpu_threads,
-            download_root=self.settings.whisper_download_root,
-        )
-
-    def transcribe_sync(self, pcm: bytes, language: str | tuple[str, ...] | None) -> Transcript:
-        audio = np.frombuffer(pcm, dtype="<i2").astype(np.float32) / 32768.0
-        detected_probability = None
-        if isinstance(language, (tuple, list)):
-            allowed = tuple(dict.fromkeys(language))
-            if len(allowed) == 1:
-                language = allowed[0]
-            elif allowed:
-                _, _, all_language_probs = self.model.detect_language(
-                    audio, language_detection_segments=1,
-                )
-                probabilities = dict(all_language_probs or [])
-                language = max(allowed, key=lambda candidate: probabilities.get(candidate, 0.0))
-                detected_probability = probabilities.get(language, 0.0)
-            else:
-                language = None
-        segments, info = self.model.transcribe(
-            audio, language=language, beam_size=1, best_of=1, temperature=0,
-            condition_on_previous_text=False, vad_filter=False,
-            without_timestamps=True,
-        )
-        text = " ".join(segment.text.strip() for segment in segments).strip()
-        return Transcript(text[:4000], info.language,
-                          detected_probability if detected_probability is not None
-                          else info.language_probability)
-
-
 def create_recognizer(settings):
-    if settings.speech_backend == "whisper":
-        return WhisperRecognizer(settings)
     from app.nemotron import NemotronRecognizer
 
     return NemotronRecognizer(settings)

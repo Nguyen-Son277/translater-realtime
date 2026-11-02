@@ -12,7 +12,8 @@ from app.auth import (
     revoke_sessions,
 )
 from app.models import Membership, Room, Session, User, utcnow
-from app.schemas import AccountStatusUpdate, AdminPasswordReset
+from app.schemas import AccountStatusUpdate, AdminPasswordReset, TranslationSettingsPatch
+from app.translation import GatewayTranslator, TranslationError
 
 PAGE_SIZE_DEFAULT = 25
 PAGE_SIZE_MAX = 100
@@ -153,6 +154,31 @@ def create_admin_router(settings, database, hub, rate_limit):
         for room_id in owned_rooms:
             await hub.broadcast(room_id, {"type": "room.deleted"})
             await hub.close_room(room_id)
+
+    @router.get("/settings/translation")
+    def get_translation_settings(request: Request, admin=Depends(current_admin)):
+        return request.app.state.gateway_settings.snapshot().public()
+
+    @router.patch("/settings/translation")
+    def patch_translation_settings(body: TranslationSettingsPatch, request: Request,
+                                   admin=Depends(current_admin)):
+        rate_limit(request)
+        return request.app.state.gateway_settings.patch(body).public()
+
+    @router.post("/settings/translation/test")
+    async def test_translation_settings(request: Request, admin=Depends(current_admin)):
+        rate_limit(request)
+        # This operation always uses saved configuration, never submitted secrets.
+        translator = GatewayTranslator(settings, request.app.state.gateway_settings)
+        try:
+            await translator.translate("Hello", "en", "vi")
+            return {"status": "ok"}
+        except TranslationError as exc:
+            raise HTTPException(502, exc.code) from None
+        except Exception:
+            raise HTTPException(502, "unavailable") from None
+        finally:
+            await translator.close()
 
     return router
 

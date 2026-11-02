@@ -5,9 +5,8 @@ import time
 import pytest
 from starlette.websockets import WebSocketDisconnect
 
-from app.config import Settings
 from app.main import create_app
-from tests.conftest import wait_message
+from tests.conftest import settings_for_test, wait_message
 from tests.fakes import FakeRecognizer, FakeTranslator
 from tests.test_application import join, make_room
 
@@ -307,10 +306,9 @@ def test_two_remote_binary_streams_keep_authors_languages_and_history_distinct(s
 
 def test_ping_pong_deadline_and_no_audio_substitution(tmp_path):
     from fastapi.testclient import TestClient
-    settings = Settings(
-        _env_file=None,
+    settings = settings_for_test(
         database_url=f"sqlite:///{tmp_path / 'ping_test.db'}",
-        whisper_download_root=str(tmp_path / "models"),
+        speech_download_root=str(tmp_path / "models"),
         ws_ping_interval=0.05,
         ws_pong_deadline=0.15,
     )

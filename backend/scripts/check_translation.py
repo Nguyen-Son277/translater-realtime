@@ -7,7 +7,9 @@ import statistics
 import time
 
 from app.config import Settings
-from app.translation import LocalTranslator, TranslationError
+from app.db import Database
+from app.gateway_settings import GatewaySettingsStore
+from app.translation import GatewayTranslator, TranslationError
 
 SAMPLES = [
     ("vi", "en", "Xin chào, bạn có thể giúp tôi tìm nhà ga gần nhất không?"),
@@ -30,22 +32,18 @@ OTHER_SAMPLES = [
 
 async def benchmark(args):
     settings = Settings()
-    if args.backend:
-        settings.translation_backend = args.backend
-    if args.url:
-        settings.translation_base_url = args.url
-    if args.model:
-        settings.translation_model = args.model
-    if args.backend == "translategemma":
-        settings.translation_api_key = ""
-    translator = LocalTranslator(settings)
+    database = Database(settings.database_url)
+    database.migrate()
+    store = GatewaySettingsStore(database, settings)
+    store.initialize()
+    translator = GatewayTranslator(settings, store)
     durations, failures = [], []
     try:
         started = time.perf_counter()
         await translator.translate("Xin chào.", "vi", "en")
         warmup_ms = round((time.perf_counter() - started) * 1000, 1)
-        print(json.dumps({"warmup_ms": warmup_ms, "backend": settings.translation_backend,
-                          "model": settings.translation_model}), flush=True)
+        print(json.dumps({"warmup_ms": warmup_ms, "backend": "openai",
+                          "model": store.snapshot().model}), flush=True)
         samples = SAMPLES + (OTHER_SAMPLES if args.all_languages else [])
         for iteration in range(args.repeat):
             for source, target, text in samples:
@@ -66,13 +64,11 @@ async def benchmark(args):
         return bool(failures)
     finally:
         await translator.close()
+        database.engine.dispose()
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--backend", choices=["openai", "translategemma"])
-    parser.add_argument("--url")
-    parser.add_argument("--model")
     parser.add_argument("--repeat", type=int, default=3)
     parser.add_argument("--all-languages", action="store_true")
     args = parser.parse_args()

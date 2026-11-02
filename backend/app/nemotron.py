@@ -65,7 +65,7 @@ class NemotronRecognizer(SpeechRecognizer):
         text = LANGUAGE_TAG.sub("", text).strip()
         tags = LANGUAGE_TAG.findall(raw)
         detected = language or (tags[-1] if tags else "")
-        # RNNT does not expose Whisper's language posterior. This is a routing
+        # RNNT does not expose a calibrated language posterior. This is a routing
         # indicator, NOT a calibrated probability: unknown/out-of-room tags must
         # leave shared-room speaker selection to the user, never guess a side.
         accepted = detected in LOCALES and (not allowed or detected in allowed)

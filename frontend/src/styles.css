@@ -835,6 +835,26 @@ input::placeholder, textarea::placeholder { color: #64705e; }
 }
 
 
+/* Translation gateway settings */
+.admin-navigation { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 28px; }
+.admin-navigation a { padding: 10px 16px; border: 1px solid #dce1d8; border-radius: 10px; color: #52634b; background: #fafbf7; font-weight: 600; overflow-wrap: anywhere; }
+.admin-navigation a.active { background: #214c3a; border-color: #214c3a; color: white; }
+.translation-settings-card { max-width: 800px; padding: clamp(18px, 4vw, 32px); border: 1px solid #e0e6d9; border-radius: 18px; background: #fcfdf9; }
+.translation-settings-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 12px; }
+.translation-settings-heading h2 { font-size: 1.5rem; font-weight: 600; }
+.translation-settings-card fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.translation-settings-card input { min-width: 0; }
+.translation-settings-card .field-help { margin-top: 8px; color: #52634b; font-size: 1rem; line-height: 1.7; overflow-wrap: anywhere; }
+.settings-checkbox { display: flex; gap: 10px; align-items: flex-start; margin-top: 20px; font-size: 1.0625rem; cursor: pointer; }
+.settings-checkbox input { flex: 0 0 20px; width: 20px; height: 20px; margin-top: 4px; accent-color: #214c3a; }
+.translation-settings-card .settings-warning { color: #9c493e; }
+.translation-settings-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 26px; }
+.translation-settings-actions .btn { flex: 1 1 200px; }
+@media (max-width: 420px) {
+  .admin-navigation a { flex: 1 1 100%; text-align: center; }
+  .admin-main > .alert { align-items: flex-start; flex-direction: column; }
+}
+
 /* Account administration and password management */
 .admin-shell { min-height: 100dvh; background: #f6f7f2; }
 .admin-main { width: min(100%, 1280px); margin: 0 auto; padding: 38px clamp(16px, 4vw, 60px) 70px; }

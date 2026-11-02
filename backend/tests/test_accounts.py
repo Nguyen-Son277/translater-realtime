@@ -8,10 +8,10 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select, text
 
 from app.auth import COOKIE_NAME, digest_token, passwords
-from app.config import Settings
 from app.db import Database
 from app.main import create_app
 from app.models import User, utcnow
+from tests.conftest import settings_for_test
 from tests.fakes import FakeRecognizer, FakeTranslator
 
 
@@ -49,7 +49,7 @@ def test_registration_rejects_invalid_profile_without_creating_account(system, c
     client, app, *_ = system
     assert client.post("/api/auth/register", json=registration(**changes)).status_code == 422
     with app.state.database.session() as db:
-        assert db.scalar(select(User)) is None
+        assert db.scalar(select(User).where(User.username == "new_account")) is None
 
 
 @pytest.mark.parametrize("missing", ["name", "email", "password_confirmation"])
@@ -96,8 +96,8 @@ def test_duplicate_emails_are_rejected_without_changing_the_account(system, acto
 
 
 def test_legacy_migration_preserves_accounts_sessions_and_conversations(tmp_path):
-    settings = Settings(_env_file=None, database_url=f"sqlite:///{tmp_path / 'legacy.db'}",
-                        speech_enabled=False)
+    settings = settings_for_test(database_url=f"sqlite:///{tmp_path / 'legacy.db'}",
+                                 speech_enabled=False)
     legacy = Database(settings.database_url)
     root = Path(__file__).resolve().parent.parent
     config = Config(str(root / "alembic.ini"))
@@ -144,7 +144,7 @@ def test_legacy_migration_preserves_accounts_sessions_and_conversations(tmp_path
         assert history[0]["id"] == "old-message"
         assert history[0]["translation"] == "Hello"
         with app.state.database.session() as db:
-            for user in db.scalars(select(User)):
+            for user in db.scalars(select(User).where(User.username != "admin")):
                 assert user.name == user.username
                 assert user.email is None
                 assert user.is_guest is False

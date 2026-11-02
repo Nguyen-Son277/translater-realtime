@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const ADMIN_PASSWORD = 'e2e-admin-password-123';
+const ADMIN_PASSWORD = 'correct-password';
 const USER_PASSWORD = 'e2e-user-password-123';
 const dashboard = page => page.getByRole('heading', { name: 'Hiểu nhau, ngay lúc này.' });
 const accountRow = (page, username) => page.locator('tr:visible, article.admin-card:visible').filter({ has: page.getByText(`@${username}`, { exact: true }) });
@@ -26,13 +26,7 @@ async function login(page, username, password) {
 }
 
 async function signInAdmin(page) {
-  const response = await register(page, 'admin', ADMIN_PASSWORD, 'Quản trị kiểm thử');
-  if (response.status() === 409) {
-    await page.getByRole('alert').waitFor();
-    await login(page, 'admin', ADMIN_PASSWORD);
-  } else {
-    expect(response.ok(), await response.text()).toBe(true);
-  }
+  await login(page, 'admin', ADMIN_PASSWORD);
   await expect(dashboard(page)).toBeVisible();
   await expect(page.getByRole('link', { name: 'Quản trị', exact: true })).toBeVisible();
 }
@@ -176,6 +170,44 @@ test('admin searches, filters, locks, resets and deletes an account across isola
   }
 });
 
+test('admin saves translation settings through the real API and reloads safe metadata', async ({ page }) => {
+  await signInAdmin(page);
+  await page.goto('/admin/settings');
+  const url = page.getByLabel('URL gốc của API', { exact: true });
+  const model = page.getByLabel('Mô hình', { exact: true });
+  const key = page.getByLabel('Khóa API mới', { exact: true });
+  await expect(url).toBeVisible();
+  const initial = await (await page.request.get('/api/admin/settings/translation')).json();
+  expect(initial.api_key_configured).toBe(false);
+  try {
+    await url.fill('https://gateway.example/v1');
+    await model.fill('integration-model');
+    await key.fill('integration-only-secret');
+    const response = page.waitForResponse(response => response.url().endsWith('/api/admin/settings/translation') && response.request().method() === 'PATCH');
+    await page.getByRole('button', { name: 'Lưu cấu hình', exact: true }).click();
+    const saved = await (await response).json();
+    expect(saved).toMatchObject({ base_url: 'https://gateway.example/v1', model: 'integration-model', api_key_configured: true, configured: true, revision: initial.revision + 1 });
+    expect(saved).not.toHaveProperty('api_key');
+    await expect(key).toHaveValue('');
+    await page.reload();
+    await expect(url).toHaveValue('https://gateway.example/v1');
+    await expect(model).toHaveValue('integration-model');
+    await expect(key).toHaveValue('');
+    await expect(page.getByText('Đã lưu khóa API. Khóa hiện tại không bao giờ được hiển thị.')).toBeVisible();
+    await model.fill('integration-model-2');
+    await page.getByRole('button', { name: 'Lưu cấu hình', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('Đã lưu cấu hình.');
+    expect(await (await page.request.get('/api/admin/settings/translation')).json()).toMatchObject({ model: 'integration-model-2', api_key_configured: true });
+    await page.getByLabel('Xóa khóa API đã lưu khi lưu thay đổi').check();
+    await page.getByRole('button', { name: 'Lưu cấu hình', exact: true }).click();
+    await expect(page.getByText('Chưa lưu khóa API.')).toBeVisible();
+  } finally {
+    const current = await (await page.request.get('/api/admin/settings/translation')).json();
+    const restored = await page.request.patch('/api/admin/settings/translation', { data: { base_url: initial.base_url, model: initial.model, revision: current.revision, api_key: '' } });
+    expect(restored.ok()).toBe(true);
+  }
+});
+
 test('admin changes own password with validation and restores the original credential', async ({ page }) => {
   test.setTimeout(60000);
   const changedPassword = 'changed-admin-password-123';
@@ -209,7 +241,7 @@ test('admin changes own password with validation and restores the original crede
     await login(page, 'admin', ADMIN_PASSWORD);
     await expect(dashboard(page)).toBeVisible();
     await page.getByRole('link', { name: 'Quản trị', exact: true }).click();
-    await page.getByRole('searchbox', { name: 'Tìm kiếm tài khoản' }).fill('admin@example.com');
+    await page.getByRole('searchbox', { name: 'Tìm kiếm tài khoản' }).fill('admin');
     const row = accountRow(page, 'admin');
     await expect(row).toBeVisible();
     await expect(row.getByText('Không thể thao tác trên tài khoản admin', { exact: true })).toBeVisible();

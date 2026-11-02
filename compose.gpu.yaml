@@ -8,9 +8,7 @@ services:
       dockerfile: Dockerfile.gpu
     environment:
       SPEECH_ENABLED: "true"
-      SPEECH_BACKEND: nemotron
       SPEECH_DEVICE: cuda
-      TRANSLATION_BACKEND: openai
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
     deploy:
       resources:

@@ -1,7 +1,6 @@
 from pathlib import Path
-from typing import Literal
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 LANGUAGES = {
@@ -33,30 +32,28 @@ class Settings(BaseSettings):
     session_days: int = Field(default=7, ge=1, le=30)
     allowed_origins: str = ""
     auth_rate_limit: int = Field(default=60, ge=1)
-    # Comma-separated usernames that may manage accounts. The bare "admin" account
-    # is bootstrapped by default so the admin page is usable without extra setup.
-    admin_usernames: str = "admin"
+    # Required at startup; keep this stable to decrypt saved gateway credentials.
+    settings_encryption_key: str = Field(default="", repr=False)
+    bootstrap_admin_username: str = Field(default="", validation_alias=AliasChoices(
+        "bootstrap_admin_username", "admin_username"))
+    bootstrap_admin_password: str = Field(default="", repr=False, validation_alias=AliasChoices(
+        "bootstrap_admin_password", "admin_password"))
+    bootstrap_admin_name: str = "Administrator"
+    bootstrap_admin_email: str = ""
     ws_ping_interval: float = Field(default=10.0, ge=0.01, le=60.0)
     ws_pong_deadline: float = Field(default=30.0, ge=0.01, le=120.0)
-    # The existing LLM gateway is the default; local inference is explicitly opt-in.
-    translation_backend: Literal["openai", "translategemma"] = "openai"
+    # Legacy environment values seed only a newly created settings row.
     translation_base_url: str = ""
     translation_model: str = ""
-    translation_api_key: str = ""
+    translation_api_key: str = Field(default="", repr=False)
     translation_timeout: float = Field(default=45, ge=1, le=300)
     translation_concurrency: int = Field(default=2, ge=1, le=8)
     translation_queue_size: int = Field(default=32, ge=1, le=128)
     speech_enabled: bool = True
-    speech_backend: Literal["nemotron", "whisper"] = "nemotron"
     speech_model: str = "nvidia/nemotron-3.5-asr-streaming-0.6b"
     speech_device: str = "cpu"
     speech_cpu_threads: int = Field(default=4, ge=1, le=64)
     speech_download_root: str = "./models"
-    whisper_model: str = "base"
-    whisper_device: str = "cpu"
-    whisper_compute_type: str = "int8"
-    whisper_cpu_threads: int = Field(default=4, ge=1, le=64)
-    whisper_download_root: str = "./models"
     speech_silence_ms: int = Field(default=400, ge=200, le=2000, multiple_of=20)
     speech_max_segment_ms: int = Field(default=4000, ge=1000, le=10000, multiple_of=20)
     speech_preview_ms: int = Field(default=1000, ge=400, le=5000, multiple_of=20)
@@ -67,14 +64,8 @@ class Settings(BaseSettings):
     def trusted_origins(self) -> set[str]:
         return {origin.strip().rstrip("/") for origin in self.allowed_origins.split(",") if origin.strip()}
 
-    @property
-    def admin_usernames_set(self) -> set[str]:
-        return {name.strip().lower() for name in self.admin_usernames.split(",") if name.strip()}
-
     def prepare_directories(self) -> None:
         if self.database_url.startswith("sqlite:///") and ":memory:" not in self.database_url:
             Path(self.database_url.removeprefix("sqlite:///")).parent.mkdir(parents=True, exist_ok=True)
         if self.speech_enabled:
-            root = (self.speech_download_root if self.speech_backend == "nemotron"
-                    else self.whisper_download_root)
-            Path(root).mkdir(parents=True, exist_ok=True)
+            Path(self.speech_download_root).mkdir(parents=True, exist_ok=True)

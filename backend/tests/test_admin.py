@@ -33,20 +33,17 @@ def login(client, username, password="correct-password"):
     return client.post("/api/auth/login", json={"username": username, "password": password}, headers=ANONYMOUS)
 
 
-def test_admin_default_and_case_insensitive_configuration(system, actor):
+def test_admin_role_is_durable_and_registration_never_grants_privileges(system, actor):
     _, app, *_ = system
-    assert Settings.model_fields["admin_usernames"].default == "admin"
+    assert "admin_usernames" not in Settings.model_fields
     admin = actor("admin")
     assert admin.user["is_admin"] is True
     assert admin.get(BASE).status_code == 200
-    app.state.settings.admin_usernames = " ADMIN , Supervisor, , "
-    assert app.state.settings.admin_usernames_set == {"admin", "supervisor"}
     supervisor = actor("supervisor")
-    assert supervisor.user["is_admin"] is True
-    assert supervisor.get(BASE).status_code == 200
-    app.state.settings.admin_usernames = ""
-    assert admin.get(BASE).status_code == 403
-    assert admin.get("/api/auth/me").json()["is_admin"] is False
+    assert supervisor.user["is_admin"] is False
+    app.state.settings.bootstrap_admin_username = "supervisor"
+    assert supervisor.get(BASE).status_code == 403
+    assert admin.get("/api/auth/me").json()["is_admin"] is True
 
 
 def test_admin_permission_matrix_and_private_profiles(system, actor):
@@ -153,8 +150,10 @@ def test_lock_revokes_sessions_closes_socket_and_unlocks(system, actor):
 @pytest.mark.parametrize("target", ["admin", "supervisor", "missing"])
 def test_admin_targets_are_protected_and_unknown_targets_are_not_found(system, actor, target):
     _, app, *_ = system
-    app.state.settings.admin_usernames = "admin,supervisor"
     admin, supervisor = actor("admin"), actor("supervisor")
+    with app.state.database.session() as db:
+        db.get(User, supervisor.user["id"]).is_admin = True
+        db.commit()
     user_id = {"admin": admin.user["id"], "supervisor": supervisor.user["id"], "missing": "unknown"}[target]
     expected = 404 if target == "missing" else 403
     assert admin.patch(f"{BASE}/{user_id}", json={"is_active": False}).status_code == expected

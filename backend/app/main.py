@@ -17,6 +17,7 @@ from fastapi import (
     Response,
     WebSocket,
 )
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from sqlalchemy import delete, select, update
@@ -39,8 +40,10 @@ from app.auth import (
     user_dict,
     verify_password,
 )
+from app.bootstrap import bootstrap_admin
 from app.config import LANGUAGES, WS_PING_INTERVAL, WS_PONG_DEADLINE, Settings
 from app.db import Database
+from app.gateway_settings import GatewaySettingsStore
 from app.hub import DISCONNECTED, Connection, Hub
 from app.models import Membership, Message, Room, Session, User, utcnow
 from app.schemas import (
@@ -55,7 +58,7 @@ from app.schemas import (
 )
 from app.services import MessageService
 from app.speech import AudioStream, create_recognizer
-from app.translation import LocalTranslator, TranslationJobs
+from app.translation import GatewayTranslator, TranslationJobs
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -67,7 +70,8 @@ def create_app(settings=None, recognizer=None, translator=None):
     database = Database(settings.database_url)
     hub = Hub()
     recognizer = recognizer or create_recognizer(settings)
-    translator = translator or LocalTranslator(settings)
+    gateway_settings = GatewaySettingsStore(database, settings)
+    translator = translator or GatewayTranslator(settings, gateway_settings)
     jobs = TranslationJobs(database, hub, translator, settings)
     messages = MessageService(database, hub, jobs)
     attempts = defaultdict(deque)
@@ -75,6 +79,8 @@ def create_app(settings=None, recognizer=None, translator=None):
     @asynccontextmanager
     async def lifespan(app):
         database.migrate()
+        gateway_settings.initialize()
+        bootstrap_admin(database, settings)
         with database.session() as db:
             db.execute(delete(Session).where(Session.expires_at < utcnow()))
             db.execute(update(Message).where(Message.status == "pending").values(
@@ -95,9 +101,22 @@ def create_app(settings=None, recognizer=None, translator=None):
     app.state.database = database
     app.state.settings = settings
     app.state.recognizer = recognizer
+    app.state.gateway_settings = gateway_settings
     app.state.translator = translator
     app.state.hub = hub
     app.state.messages = messages
+
+    @app.exception_handler(RequestValidationError)
+    async def safe_validation_error(request, exc):
+        # Pydantic can echo secrets both as values and as unknown JSON field names.
+        if request.url.path.startswith("/api/admin/settings/"):
+            errors = [{"loc": ["body"], "type": "value_error",
+                       "msg": "Invalid settings request."}]
+        else:
+            errors = [{"loc": (["body"] if error["type"] == "extra_forbidden" else error["loc"]),
+                       "type": error["type"], "msg": error["msg"]}
+                      for error in exc.errors()]
+        return JSONResponse({"detail": errors}, status_code=422)
 
     @app.middleware("http")
     async def same_origin(request: Request, call_next):
@@ -139,7 +158,7 @@ def create_app(settings=None, recognizer=None, translator=None):
     @app.get("/api/config")
     def config(user=Depends(current_user)):
         return {"languages": LANGUAGES, "speech": recognizer.state,
-                "translation_configured": translator.configured}
+                "translation_configured": gateway_settings.snapshot().configured}
 
     @app.post("/api/auth/register", status_code=201)
     async def register(body: Registration, request: Request, response: Response):

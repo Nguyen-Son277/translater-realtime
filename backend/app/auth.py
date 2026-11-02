@@ -26,8 +26,6 @@ def origin_allowed(origin: str | None, host: str, trusted: set[str]) -> bool:
         return False
     if parsed.netloc == host or origin.rstrip("/") in trusted:
         return True
-    if parsed.netloc.endswith(".trycloudflare.com"):
-        return True
     for pattern in trusted:
         if pattern.startswith("*.") and parsed.netloc.endswith(pattern[1:]):
             return True
@@ -65,10 +63,7 @@ def current_account(user: User = Depends(current_user)) -> User:
 
 
 def is_admin(user: User, settings) -> bool:
-    return bool(
-        user and not user.is_guest
-        and user.username.lower() in settings.admin_usernames_set
-    )
+    return bool(user and not user.is_guest and user.is_admin)
 
 
 def current_admin(request: Request, user: User = Depends(current_user)) -> User:

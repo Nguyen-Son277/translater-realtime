@@ -95,6 +95,48 @@ class AccountStatusUpdate(BaseModel):
     is_active: bool
 
 
+class TranslationSettingsPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+
+    revision: int = Field(ge=0)
+    base_url: str = Field(default="", max_length=2048)
+    model: str = Field(default="", max_length=200)
+    api_key: str | None = Field(default=None, max_length=8192, repr=False)
+
+    @field_validator("base_url")
+    @classmethod
+    def validate_base_url(cls, value):
+        from urllib.parse import urlsplit
+        value = value.strip().rstrip("/")
+        if not value:
+            return value
+        try:
+            parsed = urlsplit(value)
+            valid = (parsed.scheme in {"http", "https"} and parsed.hostname and parsed.port != 0
+                     and parsed.username is None and parsed.password is None and not parsed.query
+                     and not parsed.fragment
+                     and not any(char.isspace() or ord(char) < 32 or ord(char) == 127
+                                 for char in value)
+                     and "?" not in value and "#" not in value and chr(92) not in value)
+        except ValueError:
+            valid = False
+        if not valid:
+            raise ValueError("Use an HTTP(S) gateway URL without credentials, query or fragment.")
+        return value
+
+    @field_validator("model")
+    @classmethod
+    def normalize_model(cls, value):
+        return value.strip()
+
+    @field_validator("api_key")
+    @classmethod
+    def validate_api_key(cls, value):
+        if value is not None and any(char in value for char in "\r\n\x00"):
+            raise ValueError("Invalid API key.")
+        return value
+
+
 class RoomCreate(BaseModel):
     title: str = Field(default="", max_length=100)
     mode: Literal["shared", "remote"] = "shared"

@@ -7,7 +7,6 @@ from sqlalchemy import select
 
 from app.config import LANGUAGE_NAMES
 from app.models import Message, Room, message_dict, utcnow
-from app.translategemma import translate as translate_gemma
 
 logger = logging.getLogger(__name__)
 
@@ -18,30 +17,31 @@ class TranslationError(Exception):
         super().__init__(code)
 
 
-class LocalTranslator:
-    def __init__(self, settings, transport=None):
+class GatewayTranslator:
+    """OpenAI-compatible gateway client; one immutable config snapshot per request."""
+    def __init__(self, settings, store, transport=None):
         self.settings = settings
+        self.store = store
         self.client = httpx.AsyncClient(
             timeout=settings.translation_timeout, transport=transport, follow_redirects=False,
         )
 
     @property
     def configured(self):
-        return bool(self.settings.translation_base_url and self.settings.translation_model)
+        return self.store.snapshot().configured
 
     async def translate(self, text: str, source: str, target: str) -> str:
-        if not self.configured:
+        snapshot = self.store.snapshot()
+        if not snapshot.configured:
             raise TranslationError("not_configured")
-        if self.settings.translation_backend == "translategemma":
-            return await self._translate_gemma(text, source, target)
-        base = self.settings.translation_base_url.rstrip("/")
+        base = snapshot.base_url.rstrip("/")
         endpoint = base + ("/chat/completions" if base.endswith("/v1") else "/v1/chat/completions")
         headers = {}
-        if self.settings.translation_api_key:
-            headers["Authorization"] = f"Bearer {self.settings.translation_api_key}"
+        if snapshot.api_key:
+            headers["Authorization"] = f"Bearer {snapshot.api_key}"
         try:
             response = await self.client.post(endpoint, headers=headers, json={
-                "model": self.settings.translation_model,
+                "model": snapshot.model,
                 "messages": [
                     {"role": "system", "content": (
                         f"Translate the user's text from {LANGUAGE_NAMES[source]} to "
@@ -64,33 +64,6 @@ class LocalTranslator:
                 raise TranslationError("invalid_response")
             return result.strip()
         except httpx.TimeoutException as exc:
-            raise TranslationError("timeout") from exc
-        except httpx.HTTPError as exc:
-            raise TranslationError("unavailable") from exc
-        except (KeyError, IndexError, ValueError, TypeError) as exc:
-            raise TranslationError("invalid_response") from exc
-
-    async def _translate_gemma(self, text: str, source: str, target: str) -> str:
-        base = self.settings.translation_base_url.rstrip("/").removesuffix("/v1")
-        headers = {}
-        if self.settings.translation_api_key:
-            headers["Authorization"] = f"Bearer {self.settings.translation_api_key}"
-
-        async def post(path, payload):
-            response = await self.client.post(base + path, headers=headers, json=payload)
-            if response.status_code in {401, 403}:
-                raise TranslationError("upstream_auth")
-            if response.status_code == 429:
-                raise TranslationError("rate_limited")
-            response.raise_for_status()
-            return response.json()
-
-        try:
-            # httpx's timeout is per operation, not an overall deadline. Include
-            # splitting, tokenize requests and every completion in one budget.
-            async with asyncio.timeout(self.settings.translation_timeout):
-                return await translate_gemma(post, text, source, target, self.settings.translation_model)
-        except (TimeoutError, httpx.TimeoutException) as exc:
             raise TranslationError("timeout") from exc
         except httpx.HTTPError as exc:
             raise TranslationError("unavailable") from exc

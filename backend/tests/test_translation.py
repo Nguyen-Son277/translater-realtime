@@ -2,7 +2,16 @@ import httpx
 import pytest
 
 from app.config import Settings
-from app.translation import LocalTranslator, TranslationError
+from app.gateway_settings import GatewaySnapshot
+from app.translation import GatewayTranslator, TranslationError
+
+
+class Store:
+    def __init__(self, base_url="", model="", api_key=""):
+        self.value = GatewaySnapshot(base_url, model, api_key)
+
+    def snapshot(self):
+        return self.value
 
 
 @pytest.mark.parametrize("base", ["http://local-model:8001", "http://local-model:8001/v1/"])
@@ -18,9 +27,9 @@ async def test_openai_compatible_contract_and_key_stays_server_side(base):
         assert "English" in payload["messages"][0]["content"]
         assert payload["messages"][1] == {"role": "user", "content": "Xin chào"}
         return httpx.Response(200, json={"choices": [{"message": {"content": "Hello"}}]})
-    settings = Settings(_env_file=None, translation_base_url=base, translation_model="my-model",
-                        translation_api_key="local-secret")
-    translator = LocalTranslator(settings, transport=httpx.MockTransport(respond))
+    settings = Settings(_env_file=None)
+    translator = GatewayTranslator(settings, Store(base, "my-model", "local-secret"),
+                                 transport=httpx.MockTransport(respond))
     assert await translator.translate("Xin chào", "vi", "en") == "Hello"
     await translator.close()
 
@@ -31,8 +40,7 @@ async def test_openai_compatible_contract_and_key_stays_server_side(base):
     (200, {"choices": [{"message": {"content": ""}}]}, "invalid_response"),
 ])
 async def test_upstream_failures_are_safe(status, payload, code):
-    translator = LocalTranslator(Settings(_env_file=None, translation_base_url="http://model/v1",
-                                          translation_model="local"),
+    translator = GatewayTranslator(Settings(_env_file=None), Store("http://model/v1", "local"),
                                  transport=httpx.MockTransport(lambda _: httpx.Response(status, json=payload)))
     with pytest.raises(TranslationError) as error:
         await translator.translate("secret text", "vi", "en")
@@ -41,7 +49,7 @@ async def test_upstream_failures_are_safe(status, payload, code):
 
 
 async def test_unconfigured_model_never_fabricates_a_translation():
-    translator = LocalTranslator(Settings(_env_file=None))
+    translator = GatewayTranslator(Settings(_env_file=None), Store())
     with pytest.raises(TranslationError, match="not_configured"):
         await translator.translate("Xin chào", "vi", "en")
     await translator.close()

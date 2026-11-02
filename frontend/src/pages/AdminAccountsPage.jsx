@@ -2,6 +2,7 @@ import { Eye, EyeOff, KeyRound, Lock, Search, ShieldOff, Trash2, Unlock } from '
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { Header, Modal } from '../components';
+import { AdminNavigation } from '../components/AdminNavigation';
 import { useI18n } from '../i18n';
 
 const PAGE_SIZE = 25;
@@ -254,6 +255,7 @@ export function AdminAccountsPage() {
   return <div className="admin-shell">
     <Header />
     <main className="admin-main">
+      <AdminNavigation />
       <header className="admin-heading">
         <h1>{t('admin.title')}</h1>
         <p className="muted">{t('admin.subtitle')}</p>

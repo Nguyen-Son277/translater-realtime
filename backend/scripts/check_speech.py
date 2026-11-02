@@ -4,8 +4,8 @@ import json
 import statistics
 import time
 
+import librosa
 import numpy as np
-from faster_whisper.audio import decode_audio
 
 from app.config import LANGUAGES, Settings
 from app.speech import create_recognizer
@@ -25,13 +25,11 @@ def main():
     settings = Settings()
     settings.prepare_directories()
     recognizer = create_recognizer(settings)
-    model_name = (settings.speech_model if settings.speech_backend == "nemotron"
-                  else settings.whisper_model)
-    device = (settings.speech_device if settings.speech_backend == "nemotron"
-              else settings.whisper_device)
+    model_name = settings.speech_model
+    device = settings.speech_device
     print(f"Đang tải model {model_name} ({device})…", flush=True)
     recognizer.model = recognizer.load_sync()
-    audio = decode_audio(args.file, sampling_rate=16000)[:int(16000 * args.seconds)]
+    audio, _ = librosa.load(args.file, sr=16000, mono=True, duration=args.seconds)
     if not len(audio):
         parser.error("File âm thanh rỗng")
     pcm = (np.clip(audio, -1, 1) * 32767).astype("<i2").tobytes()
@@ -40,7 +38,7 @@ def main():
         started = time.monotonic()
         result = recognizer.transcribe_sync(pcm, None if args.language == "auto" else args.language)
         durations.append(time.monotonic() - started)
-    print(json.dumps({"backend": settings.speech_backend, "model": model_name,
+    print(json.dumps({"backend": "nemotron", "model": model_name,
                       "text": result.text, "language": result.language,
                       "confidence": round(result.confidence, 3),
                       "audio_seconds": len(audio) / 16000,

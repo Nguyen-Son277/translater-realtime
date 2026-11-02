@@ -2,14 +2,34 @@ services:
   backend:
     build: ./backend
     restart: unless-stopped
-    env_file:
-      - path: .env
-        required: false
+    # Deliberately scoped: tunnel credentials never enter the application.
     environment:
       DATABASE_URL: sqlite:////data/app.db
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:-}
+      # One-time import only; remove these after settings are persisted.
+      TRANSLATION_BASE_URL: ${TRANSLATION_BASE_URL:-}
+      TRANSLATION_MODEL: ${TRANSLATION_MODEL:-}
+      TRANSLATION_API_KEY: ${TRANSLATION_API_KEY:-}
+      TRANSLATION_TIMEOUT: ${TRANSLATION_TIMEOUT:-45}
+      TRANSLATION_CONCURRENCY: ${TRANSLATION_CONCURRENCY:-2}
+      TRANSLATION_QUEUE_SIZE: ${TRANSLATION_QUEUE_SIZE:-32}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      SESSION_DAYS: ${SESSION_DAYS:-7}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      AUTH_RATE_LIMIT: ${AUTH_RATE_LIMIT:-60}
+      SPEECH_ENABLED: ${SPEECH_ENABLED:-true}
+      SPEECH_MODEL: ${SPEECH_MODEL:-nvidia/nemotron-3.5-asr-streaming-0.6b}
+      SPEECH_DEVICE: ${SPEECH_DEVICE:-cpu}
+      SPEECH_CPU_THREADS: ${SPEECH_CPU_THREADS:-4}
       SPEECH_DOWNLOAD_ROOT: /models
       HF_HOME: /models/huggingface
-      WHISPER_DOWNLOAD_ROOT: /models
+      SPEECH_SILENCE_MS: ${SPEECH_SILENCE_MS:-400}
+      SPEECH_MAX_SEGMENT_MS: ${SPEECH_MAX_SEGMENT_MS:-4000}
+      SPEECH_PREVIEW_MS: ${SPEECH_PREVIEW_MS:-1000}
+      LANGUAGE_CONFIDENCE: ${LANGUAGE_CONFIDENCE:-0.60}
+      AUDIO_QUEUE_SIZE: ${AUDIO_QUEUE_SIZE:-4}
     extra_hosts:
       - host.docker.internal:host-gateway
     volumes:
@@ -30,12 +50,24 @@ services:
       backend:
         condition: service_healthy
     ports:
-      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-8080}:80"
+      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-38471}:80"
     healthcheck:
       test: [CMD, wget, -q, --spider, http://127.0.0.1/]
       interval: 30s
       timeout: 3s
       retries: 3
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.10.0
+    profiles: [tunnel]
+    restart: unless-stopped
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    # A missing token makes the connector exit; secrets are not CLI arguments.
+    command: [tunnel, --no-autoupdate, run]
+    depends_on:
+      frontend:
+        condition: service_healthy
 
 volumes:
   database:

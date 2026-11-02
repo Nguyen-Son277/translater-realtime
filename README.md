@@ -112,7 +112,7 @@ Luôn dùng cả hai file Compose khi tạo lại container GPU. Không tự fal
 - Volume `database` lưu SQLite; volume `speech_models` lưu Nemotron. `docker compose down` giữ volume; **không thêm `-v`**, không prune diện rộng.
 - Migration tự chạy khi backend khởi động, giữ tài khoản, mật khẩu và hội thoại cũ. Sao lưu SQLite bằng SQLite backup API khi đang chạy hoặc sau khi dừng backend; không chỉ copy file database đang ghi WAL.
 - Sao lưu `SETTINGS_ENCRYPTION_KEY` cùng database, nhưng cất riêng với quyền truy cập phù hợp. Sao lưu chứa thông tin hội thoại và hash mật khẩu, cần bảo vệ như dữ liệu thật.
-- Thay env vận hành cần `docker compose up -d --force-recreate`; chỉnh gateway qua admin không cần restart.
+- Thay env vận hành cần `docker compose up -d --force-recreate`; chỉnh gateway hoặc cấu hình giọng nói qua admin không cần restart (giọng nói áp dụng từ lần bật micro tiếp theo).
 - ASR duy nhất là Nemotron, không còn lựa chọn backend nhận dạng khác. Các biến legacy chọn backend không còn được hỗ trợ. Bộ dịch GGUF/runtime local và các overlay tương ứng đã được bỏ.
 - [Công cụ dọn cache legacy](<scripts/clean_legacy_models.py>) chỉ xoá cache model bị bỏ và blob đã chứng minh không được cache giữ lại tham chiếu; không xoá nguyên kho blob dùng chung. Chạy khi không có tiến trình dùng cache. Không áp dụng lên cache ngoài dự án hoặc volume chưa kiểm tra.
 
@@ -124,7 +124,7 @@ Bản native dùng [dữ liệu backend](<backend/data>) và model theo `SPEECH_
 
 ## Sử dụng và giới hạn
 
-- **Admin:** `/admin` quản lý tài khoản: tìm kiếm, lọc, phân trang, khoá/mở khoá, đặt lại mật khẩu, xoá. `/admin/settings` quản lý gateway. User thường và guest không có quyền gọi API quản trị.
+- **Admin:** `/admin` quản lý tài khoản: tìm kiếm, lọc, phân trang, khoá/mở khoá, đặt lại mật khẩu, xoá. `/admin/settings` quản lý gateway và cấu hình chia đoạn/phụ đề giọng nói. User thường và guest không có quyền gọi API quản trị.
 - **Tài khoản:** đăng ký user thường bằng username 3–32 ký tự `a-z0-9_.-`, họ tên, email, mật khẩu 8–128 ký tự và xác nhận. Phiên mặc định 7 ngày. Sửa email/đổi mật khẩu tại cài đặt tài khoản; email chưa được xác minh qua thư.
 - **Một máy chung:** hai người nói lần lượt; gán A/B theo tag ngôn ngữ trong cặp của phòng, không nhận diện danh tính giọng nói. Tag không đủ tin cậy thì chọn người nói trước khi dịch.
 - **Hai máy từ xa:** chủ phòng đăng nhập, tạo link/QR cho người còn lại; người được mời có thể vào bằng phiên khách HttpOnly, không đăng ký. Link dùng một lần, hết hạn 24 giờ; mỗi phòng tối đa hai thành viên.
@@ -141,7 +141,19 @@ Micro → AudioWorklet → PCM 16-bit mono 16 kHz → WebSocket
       → gateway Chat Completions → WebSocket + SQLite
 ```
 
-VAD frame 20 ms; mặc định chốt sau 400 ms im lặng hoặc tối đa 4 giây. Preview mỗi 1 giây khi bộ suy luận rảnh, không lưu preview. **Model có khả năng streaming, nhưng adapter hiện nhận dạng các đoạn VAD/preview độc lập, chưa dùng cache-aware streaming liên tục.** Không chia sẻ cache âm thanh giữa phòng. `confidence` là chỉ báo định tuyến 0/1, không phải xác suất hiệu chuẩn.
+VAD frame 20 ms; mặc định chốt sau **1.400 ms im lặng** hoặc tối đa **8 giây**. Preview mỗi **1 giây** khi bộ suy luận rảnh, không lưu preview. Admin chỉnh ba giá trị tại **Quản trị → Cài đặt hệ thống → Phân đoạn giọng nói** (`/admin/settings`):
+
+| Thông số | Mặc định | Khoảng cho phép |
+|---|---:|---:|
+| Thời gian im lặng trước khi chốt đoạn | 1.400 ms | 200–2.000 ms |
+| Độ dài tối đa mỗi đoạn âm thanh | 8.000 ms | 1.000–10.000 ms |
+| Khoảng thời gian cập nhật phụ đề tạm | 1.000 ms | 400–5.000 ms |
+
+Các giá trị phải là số nguyên, bội số 20 ms; thời gian im lặng và preview phải nhỏ hơn độ dài đoạn tối đa. Cấu hình dùng chung toàn hệ thống, lưu trong database, **áp dụng từ lần bật micro tiếp theo**, không cần restart. Phiên đang thu giữ nguyên cấu hình cũ; muốn thử ngay hãy dừng rồi bật lại micro. Nút **Dùng giá trị đề xuất** chỉ điền bản nháp; bấm **Lưu cấu hình giọng nói** để áp dụng.
+
+`SPEECH_SILENCE_MS`, `SPEECH_MAX_SEGMENT_MS`, `SPEECH_PREVIEW_MS` chỉ khởi tạo bản ghi lần đầu nếu database chưa có cấu hình. Biến môi trường được chỉ định rõ sẽ ưu tiên hơn mặc định mới khi khởi tạo; sau đó đổi env/restart không ghi đè lựa chọn admin. Tăng thời gian im lặng giúp tránh cắt giữa câu nhưng chờ bản dịch lâu hơn; đoạn dài hơn tăng tải nhận dạng. Preview có thể bị bỏ qua khi máy bận. Thời gian chờ dài cũng có thể gom hai lượt nói khác ngôn ngữ trên micro dùng chung; nên thử trước với tình huống sử dụng thực tế.
+
+**Model có khả năng streaming, nhưng adapter hiện nhận dạng các đoạn VAD/preview độc lập, chưa dùng cache-aware streaming liên tục.** Không chia sẻ cache âm thanh giữa phòng. `confidence` là chỉ báo định tuyến 0/1, không phải xác suất hiệu chuẩn. Cấu hình này không ghép/sửa lại các câu đã chốt hay bổ sung ngữ cảnh cho dịch.
 
 Mỗi capture có tối đa 4 đoạn chờ; quá tải dừng micro và báo lỗi. Preview bị bỏ qua khi ASR bận, ưu tiên bản chốt. Dừng micro phản hồi ngay; model native đang chạy vẫn phải hoàn tất trước lượt kế tiếp. Hai phiên đã dừng có thể đang xử lý nốt; sau 15 giây yêu cầu huỷ, không chạy chồng suy luận. Dịch có 32 câu chờ, 2 tác vụ song song mặc định. Độ trễ tuỳ CPU/GPU, đoạn nói và gateway; không cam kết dưới một giây.
 
@@ -182,6 +194,8 @@ docker compose exec backend python -c "import urllib.request; print(urllib.reque
 
 ## API quản trị thiết lập
 
+- `GET /api/admin/settings/speech`: `silence_ms`, `max_segment_ms`, `preview_ms`, `revision`; chỉ admin được xem.
+- `PATCH /api/admin/settings/speech`: bắt buộc `revision`, kèm các thông số cần đổi (không nhận null). Kiểm tra cả cấu hình sau khi hợp nhất, lỗi 422 không lưu gì; revision cũ trả 409. Giá trị trả về áp dụng cho phiên micro mới, không thay phiên đang chạy.
 - `GET /api/admin/settings/translation`: `base_url`, `model`, `api_key_configured`, `configured`, `revision`; không trả key.
 - `PATCH /api/admin/settings/translation`: URL/model/revision; `api_key` bỏ qua hoặc null giữ nguyên, rỗng xoá, giá trị mới thay key. Conflict trả 409.
 - `POST /api/admin/settings/translation/test`: thử cấu hình đã lưu bằng câu ngắn, lỗi được chuẩn hoá không chứa upstream response/header.

@@ -12,7 +12,12 @@ from app.auth import (
     revoke_sessions,
 )
 from app.models import Membership, Room, Session, User, utcnow
-from app.schemas import AccountStatusUpdate, AdminPasswordReset, TranslationSettingsPatch
+from app.schemas import (
+    AccountStatusUpdate,
+    AdminPasswordReset,
+    SpeechSettingsPatch,
+    TranslationSettingsPatch,
+)
 from app.translation import GatewayTranslator, TranslationError
 
 PAGE_SIZE_DEFAULT = 25
@@ -154,6 +159,16 @@ def create_admin_router(settings, database, hub, rate_limit):
         for room_id in owned_rooms:
             await hub.broadcast(room_id, {"type": "room.deleted"})
             await hub.close_room(room_id)
+
+    @router.get("/settings/speech")
+    def get_speech_settings(request: Request, admin=Depends(current_admin)):
+        return request.app.state.speech_settings.snapshot().public()
+
+    @router.patch("/settings/speech")
+    def patch_speech_settings(body: SpeechSettingsPatch, request: Request,
+                              admin=Depends(current_admin)):
+        rate_limit(request)
+        return request.app.state.speech_settings.patch(body).public()
 
     @router.get("/settings/translation")
     def get_translation_settings(request: Request, admin=Depends(current_admin)):

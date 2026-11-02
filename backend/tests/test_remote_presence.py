@@ -237,7 +237,8 @@ def test_binary_pcm_streaming_with_fake_recognizer(system, actor):
         voice_frame = make_voice_frame()
         silence_frame = b"\x00" * 640
 
-        # Send 15 voiced frames (300 ms) + 25 silence frames (500 ms)
+        # Send 300 ms voice + 500 ms silence: below the new 1400 ms endpoint.
+        # Explicit stop below must still drain the buffered utterance.
         for _ in range(15):
             socket.send_bytes(voice_frame)
         for _ in range(25):

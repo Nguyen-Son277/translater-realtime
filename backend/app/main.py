@@ -58,6 +58,7 @@ from app.schemas import (
 )
 from app.services import MessageService
 from app.speech import AudioStream, create_recognizer
+from app.speech_settings import SpeechSettingsStore
 from app.translation import GatewayTranslator, TranslationJobs
 
 logger = logging.getLogger(__name__)
@@ -71,6 +72,7 @@ def create_app(settings=None, recognizer=None, translator=None):
     hub = Hub()
     recognizer = recognizer or create_recognizer(settings)
     gateway_settings = GatewaySettingsStore(database, settings)
+    speech_settings = SpeechSettingsStore(database, settings)
     translator = translator or GatewayTranslator(settings, gateway_settings)
     jobs = TranslationJobs(database, hub, translator, settings)
     messages = MessageService(database, hub, jobs)
@@ -80,6 +82,7 @@ def create_app(settings=None, recognizer=None, translator=None):
     async def lifespan(app):
         database.migrate()
         gateway_settings.initialize()
+        speech_settings.initialize()
         bootstrap_admin(database, settings)
         with database.session() as db:
             db.execute(delete(Session).where(Session.expires_at < utcnow()))
@@ -102,6 +105,7 @@ def create_app(settings=None, recognizer=None, translator=None):
     app.state.settings = settings
     app.state.recognizer = recognizer
     app.state.gateway_settings = gateway_settings
+    app.state.speech_settings = speech_settings
     app.state.translator = translator
     app.state.hub = hub
     app.state.messages = messages
@@ -509,7 +513,10 @@ def create_app(settings=None, recognizer=None, translator=None):
                             await connection.send({"type": "error", "code": "capture_in_use",
                                                    "detail": "Micro đang được sử dụng trong một cửa sổ khác.", **correlated})
                             continue
-                        stream = AudioStream(recognizer, connection, room, settings, hub, on_final, capture_id=capture_id)
+                        stream = AudioStream(
+                            recognizer, connection, room, settings, hub, on_final,
+                            capture_id=capture_id, speech_config=speech_settings.snapshot(),
+                        )
                         await connection.send({"type": "audio.state", "recording": True, **correlated})
                         await hub.broadcast_presence(room.id, exclude=connection)
                     elif kind == "audio.stop":

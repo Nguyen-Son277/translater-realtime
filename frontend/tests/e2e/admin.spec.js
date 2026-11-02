@@ -196,7 +196,7 @@ test('admin saves translation settings through the real API and reloads safe met
     await expect(page.getByText('Đã lưu khóa API. Khóa hiện tại không bao giờ được hiển thị.')).toBeVisible();
     await model.fill('integration-model-2');
     await page.getByRole('button', { name: 'Lưu cấu hình', exact: true }).click();
-    await expect(page.getByRole('status')).toContainText('Đã lưu cấu hình.');
+    await expect(page.locator('.translation-settings-card').getByRole('status')).toContainText('Đã lưu cấu hình.');
     expect(await (await page.request.get('/api/admin/settings/translation')).json()).toMatchObject({ model: 'integration-model-2', api_key_configured: true });
     await page.getByLabel('Xóa khóa API đã lưu khi lưu thay đổi').check();
     await page.getByRole('button', { name: 'Lưu cấu hình', exact: true }).click();
@@ -204,6 +204,39 @@ test('admin saves translation settings through the real API and reloads safe met
   } finally {
     const current = await (await page.request.get('/api/admin/settings/translation')).json();
     const restored = await page.request.patch('/api/admin/settings/translation', { data: { base_url: initial.base_url, model: initial.model, revision: current.revision, api_key: '' } });
+    expect(restored.ok()).toBe(true);
+  }
+});
+
+test('admin saves speech settings through the real API and reloads persisted values', async ({ page }) => {
+  await signInAdmin(page);
+  await page.goto('/admin/settings');
+  const card = page.locator('.speech-settings-card');
+  const endpoint = '/api/admin/settings/speech';
+  const initialResponse = await page.request.get(endpoint);
+  expect(initialResponse.ok()).toBe(true);
+  const initial = await initialResponse.json();
+  const values = { silence_ms: 1800, max_segment_ms: 10000, preview_ms: 1200 };
+  try {
+    for (const [key, value] of Object.entries(values)) {
+      await card.locator(`[name="${key}"]`).fill(String(value));
+    }
+    const response = page.waitForResponse(response => response.url().endsWith(endpoint) && response.request().method() === 'PATCH');
+    await card.getByRole('button', { name: 'Lưu cấu hình giọng nói', exact: true }).click();
+    const savedResponse = await response;
+    expect(savedResponse.ok()).toBe(true);
+    expect(await savedResponse.json()).toEqual({ ...values, revision: initial.revision + 1 });
+    await expect(card.getByRole('status')).toContainText('Áp dụng ở lần bật micro tiếp theo');
+    await page.reload();
+    for (const [key, value] of Object.entries(values)) {
+      await expect(card.locator(`[name="${key}"]`)).toHaveValue(String(value));
+    }
+    expect(await (await page.request.get(endpoint)).json()).toEqual({ ...values, revision: initial.revision + 1 });
+    const stale = await page.request.patch(endpoint, { data: { silence_ms: 1600, revision: initial.revision } });
+    expect(stale.status()).toBe(409);
+  } finally {
+    const current = await (await page.request.get(endpoint)).json();
+    const restored = await page.request.patch(endpoint, { data: { ...initial, revision: current.revision } });
     expect(restored.ok()).toBe(true);
   }
 });

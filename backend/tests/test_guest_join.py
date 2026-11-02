@@ -259,6 +259,7 @@ def test_guest_websocket_text_voice_and_reconnect(system, actor, monkeypatch):
         socket.send_json({"type": "audio.start", "capture_id": "guest-voice"})
         assert socket.receive_json() == {"type": "audio.state", "recording": True, "capture_id": "guest-voice"}
         socket.send_bytes(VOICE * 25)
+        # A short pause must not finalize by itself; stopping flushes this guest's tail.
         socket.send_bytes(SILENCE * 20)
         socket.send_json({"type": "audio.stop", "capture_id": "guest-voice"})
         wait_message(guest, room_id, "translated", count=2)

@@ -855,6 +855,20 @@ input::placeholder, textarea::placeholder { color: #64705e; }
   .admin-main > .alert { align-items: flex-start; flex-direction: column; }
 }
 
+/* Speech settings are independent of the translation gateway form. */
+.speech-settings-card { max-width: 800px; min-width: 0; margin-top: 24px; padding: clamp(18px, 4vw, 32px); border: 1px solid #e0e6d9; border-radius: 18px; background: #fcfdf9; }
+.speech-settings-card h2 { margin-bottom: 12px; font-size: 1.5rem; font-weight: 600; }
+.speech-settings-card fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.speech-settings-card input { min-width: 0; width: 100%; }
+.speech-settings-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 20px; }
+.speech-settings-field { min-width: 0; }
+.speech-settings-card .field-help { margin-top: 8px; color: #52634b; font-size: 1rem; line-height: 1.7; overflow-wrap: anywhere; }
+.speech-field-error { margin-top: 8px; color: #9c493e; overflow-wrap: anywhere; }
+.speech-settings-card input[aria-invalid="true"] { border-color: #9c493e; }
+.speech-settings-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 26px; }
+.speech-settings-actions .btn { flex: 1 1 220px; white-space: normal; }
+.speech-settings-card .alert { flex-wrap: wrap; overflow-wrap: anywhere; }
+
 /* Account administration and password management */
 .admin-shell { min-height: 100dvh; background: #f6f7f2; }
 .admin-main { width: min(100%, 1280px); margin: 0 auto; padding: 38px clamp(16px, 4vw, 60px) 70px; }

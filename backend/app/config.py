@@ -54,8 +54,9 @@ class Settings(BaseSettings):
     speech_device: str = "cpu"
     speech_cpu_threads: int = Field(default=4, ge=1, le=64)
     speech_download_root: str = "./models"
-    speech_silence_ms: int = Field(default=400, ge=200, le=2000, multiple_of=20)
-    speech_max_segment_ms: int = Field(default=4000, ge=1000, le=10000, multiple_of=20)
+    # Seed the durable admin speech settings only when no saved row exists.
+    speech_silence_ms: int = Field(default=1400, ge=200, le=2000, multiple_of=20)
+    speech_max_segment_ms: int = Field(default=8000, ge=1000, le=10000, multiple_of=20)
     speech_preview_ms: int = Field(default=1000, ge=400, le=5000, multiple_of=20)
     language_confidence: float = Field(default=0.60, ge=0, le=1)
     audio_queue_size: int = Field(default=4, ge=1, le=16)

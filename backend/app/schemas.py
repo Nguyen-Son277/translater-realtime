@@ -95,6 +95,41 @@ class AccountStatusUpdate(BaseModel):
     is_active: bool
 
 
+SpeechSilenceMs = Annotated[int, Field(strict=True, ge=200, le=2000, multiple_of=20)]
+SpeechMaxSegmentMs = Annotated[int, Field(strict=True, ge=1000, le=10000, multiple_of=20)]
+SpeechPreviewMs = Annotated[int, Field(strict=True, ge=400, le=5000, multiple_of=20)]
+
+
+class SpeechSettingsValues(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    silence_ms: SpeechSilenceMs = 1400
+    max_segment_ms: SpeechMaxSegmentMs = 8000
+    preview_ms: SpeechPreviewMs = 1000
+
+    @model_validator(mode="after")
+    def valid_intervals(self):
+        if self.silence_ms >= self.max_segment_ms or self.preview_ms >= self.max_segment_ms:
+            raise ValueError("Silence and preview intervals must be shorter than the maximum segment.")
+        return self
+
+
+class SpeechSettingsPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+
+    revision: int = Field(strict=True, ge=0)
+    silence_ms: SpeechSilenceMs | None = None
+    max_segment_ms: SpeechMaxSegmentMs | None = None
+    preview_ms: SpeechPreviewMs | None = None
+
+    @field_validator("silence_ms", "max_segment_ms", "preview_ms")
+    @classmethod
+    def reject_explicit_null(cls, value):
+        if value is None:
+            raise ValueError("A supplied interval cannot be null.")
+        return value
+
+
 class TranslationSettingsPatch(BaseModel):
     model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
 

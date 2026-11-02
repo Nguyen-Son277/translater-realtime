@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { Header } from '../components';
 import { AdminNavigation } from '../components/AdminNavigation';
+import { SpeechSettingsCard } from '../components/SpeechSettingsCard';
 import { useI18n } from '../i18n';
 
 const ENDPOINT = '/admin/settings/translation';
@@ -121,6 +122,7 @@ export function AdminSettingsPage() {
           {notice && <p className="form-success" role="status">{t(`settings.${notice}`)}</p>}
         </section>}
       </>}
+      <SpeechSettingsCard />
     </main>
   </div>;
 }

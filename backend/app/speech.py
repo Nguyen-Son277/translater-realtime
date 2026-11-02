@@ -95,7 +95,7 @@ class AudioSegmenter:
 
     frame_bytes = 640
 
-    def __init__(self, vad=None, silence_ms=400, max_ms=4000, preview_ms=1000):
+    def __init__(self, vad=None, silence_ms=1400, max_ms=8000, preview_ms=1000):
         self.vad = vad or webrtcvad.Vad(2)
         self.silence_ms, self.max_ms, self.preview_ms = silence_ms, max_ms, preview_ms
         self.remainder = bytearray()
@@ -152,14 +152,16 @@ class AudioSegmenter:
 class AudioStream:
     """One bounded stream per capture. Finals take priority over disposable previews."""
 
-    def __init__(self, recognizer, connection, room, settings, hub, on_final, capture_id=None):
+    def __init__(self, recognizer, connection, room, settings, hub, on_final, capture_id=None,
+                 speech_config=None):
         self.recognizer, self.connection, self.room = recognizer, connection, room
         self.settings, self.hub, self.on_final = settings, hub, on_final
         self.capture_id = capture_id
+        # Copy interval values once. Admin saves never alter an in-flight capture.
         self.segmenter = AudioSegmenter(
-            silence_ms=settings.speech_silence_ms,
-            max_ms=settings.speech_max_segment_ms,
-            preview_ms=settings.speech_preview_ms,
+            silence_ms=speech_config.silence_ms if speech_config else settings.speech_silence_ms,
+            max_ms=speech_config.max_segment_ms if speech_config else settings.speech_max_segment_ms,
+            preview_ms=speech_config.preview_ms if speech_config else settings.speech_preview_ms,
         )
         self.finals = deque()
         self.partial = None

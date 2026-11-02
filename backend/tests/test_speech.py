@@ -26,8 +26,8 @@ def test_silence_creates_no_utterance_and_short_noise_is_ignored():
     assert vad.flush() == []
 
 
-def test_vad_handles_packet_boundaries_and_closes_after_400ms():
-    segmenter = AudioSegmenter(vad=MarkedVad())
+def test_vad_handles_packet_boundaries_and_closes_after_configured_400ms():
+    segmenter = AudioSegmenter(vad=MarkedVad(), silence_ms=400)
     data = VOICE * 50 + SILENCE * 20
     pieces = []
     for start in range(0, len(data), 731):
@@ -38,8 +38,8 @@ def test_vad_handles_packet_boundaries_and_closes_after_400ms():
     assert segmenter.flush() == []
 
 
-def test_long_speech_gets_previews_and_bounded_four_second_segments():
-    segmenter = AudioSegmenter(vad=MarkedVad())
+def test_long_speech_gets_previews_and_configurable_four_second_segments():
+    segmenter = AudioSegmenter(vad=MarkedVad(), max_ms=4000)
     pieces = segmenter.feed(VOICE * 650) + segmenter.flush()
     finals = [piece for piece in pieces if piece.kind == "final"]
     assert len(finals) == 4
@@ -51,8 +51,35 @@ def test_long_speech_gets_previews_and_bounded_four_second_segments():
 
 def test_silence_does_not_start_another_preview_while_waiting_to_finalize():
     segmenter = AudioSegmenter(vad=MarkedVad())
-    pieces = segmenter.feed(VOICE * 45 + SILENCE * 20)
+    pieces = segmenter.feed(VOICE * 45 + SILENCE * 70)
     assert [piece.kind for piece in pieces] == ["final"]
+
+
+@pytest.mark.parametrize("pause_ms", [400, 800, 1000, 1200])
+def test_default_segmentation_keeps_both_halves_across_a_short_pause(pause_ms):
+    segmenter = AudioSegmenter(vad=MarkedVad())
+    data = VOICE * 100 + SILENCE * (pause_ms // 20) + VOICE * 100
+    pieces = []
+    for start in range(0, len(data), 731):
+        pieces.extend(segmenter.feed(data[start:start + 731]))
+    assert not any(piece.kind == "final" for piece in pieces)
+    # Speech after the pause resets the silence counter: only a full new pause closes it.
+    assert segmenter.feed(SILENCE * 69) == []
+    final = segmenter.feed(SILENCE)
+    assert len(final) == 1 and final[0].kind == "final"
+    assert final[0].pcm == data + SILENCE * 70
+    assert segmenter.flush() == []
+
+
+def test_default_eight_second_limit_and_stop_preserve_all_voiced_pcm():
+    segmenter = AudioSegmenter(vad=MarkedVad())
+    pieces = segmenter.feed(VOICE * 650)
+    finals = [piece for piece in pieces if piece.kind == "final"]
+    assert len(finals) == 1 and finals[0].pcm == VOICE * 400
+    assert any(piece.kind == "partial" for piece in pieces)
+    tail = segmenter.flush()
+    assert len(tail) == 1 and tail[0].pcm == VOICE * 250
+    assert segmenter.flush() == []
 
 
 @pytest.mark.parametrize(("mode", "language", "confidence", "expected"), [

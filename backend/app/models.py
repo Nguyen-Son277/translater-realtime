@@ -48,6 +48,15 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class SpeechSettings(Base):
+    __tablename__ = "speech_settings"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    silence_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    max_segment_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    preview_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+
+
 class TranslationSettings(Base):
     __tablename__ = "translation_settings"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

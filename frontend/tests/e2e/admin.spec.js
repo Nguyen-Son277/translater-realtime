@@ -155,7 +155,14 @@ test('admin searches, filters, locks, resets and deletes an account across isola
     await login(userPage, username, finalPassword);
     await expect(dashboard(userPage)).toBeVisible();
     await page.reload();
+    // Wait for the debounced search itself; the unfiltered row may already be visible.
+    // Otherwise its late state update can clear the delete-success notice under test.
+    const filtered = page.waitForResponse(response => {
+      const url = new URL(response.url());
+      return url.pathname === '/api/admin/accounts' && url.searchParams.get('query') === username && response.request().method() === 'GET';
+    });
     await search.fill(username);
+    await filtered;
     await expect(row).toBeVisible();
     await expect(row.getByText('Cần đổi MK', { exact: true })).toHaveCount(0);
     await confirmAction(page, row, 'Xóa tài khoản', 'Xóa tài khoản', 'Xóa vĩnh viễn');

@@ -1,4 +1,25 @@
-# Song Ngữ
+# Transqora
+
+## Bộ nhận diện thương hiệu
+
+Bộ nhận diện Transqora được phục vụ từ `/brand/` khi triển khai:
+
+- [symbol.svg](<frontend/public/brand/symbol.svg>): biểu tượng chữ Q kết nối hai luồng đối thoại.
+- [logo.svg](<frontend/public/brand/logo.svg>): logo màu chính, wordmark dựng bằng đường vector, không phụ thuộc font ngoài.
+- [logo-mono-dark.svg](<frontend/public/brand/logo-mono-dark.svg>) và [logo-mono-light.svg](<frontend/public/brand/logo-mono-light.svg>): logo đơn sắc cho nền sáng và nền tối.
+- [logo.png](<frontend/public/brand/logo.png>): logo nền trong suốt, 1360 × 256 px.
+- [icon-192.png](<frontend/public/brand/icon-192.png>) và [icon-512.png](<frontend/public/brand/icon-512.png>): biểu tượng ứng dụng.
+- [Bản xem trước nhận diện](<frontend/public/brand/brand-preview.png>).
+
+Favicon: [SVG](<frontend/public/favicon.svg>), [ICO 16/32/48 px](<frontend/public/favicon.ico>) và [Apple Touch Icon 180 px](<frontend/public/apple-touch-icon.png>). Giữ đường dẫn khi thay ảnh; tăng mã phiên bản query trong HTML để tránh cache favicon cũ.
+
+Màu thương hiệu: **Forest `#173F35`**, **Jade `#37B9A0`**, **Paper `#F6F7F2`**. Giữ tỉ lệ logo, không kéo giãn, dành khoảng trống tối thiểu bằng 1/4 chiều cao biểu tượng. Bộ nhận diện tự dựng không phải chứng nhận đăng ký/độc quyền nhãn hiệu; cần kiểm tra pháp lý riêng trước khi đăng ký thương hiệu và đưa lên cửa hàng ứng dụng.
+
+Tái xuất bộ tài nguyên bằng `cd frontend && node scripts/generate-brand.mjs` (cần Chromium của Playwright và Pillow trong virtualenv hiện có). Sau khi cập nhật, chạy `npm test && npm run build`, triển khai lại frontend/backend theo phần Docker bên dưới rồi tải lại trang. Nếu tab vẫn hiện icon cũ, đóng/mở tab hoặc xóa cache favicon.
+
+Không đổi tên thư mục checkout, Compose project hoặc volume theo tên thương hiệu nếu chưa có kế hoạch chuyển dữ liệu; việc này có thể tạo database volume mới thay vì dùng dữ liệu hiện tại.
+
+Tên package frontend là `transqora`; phiên bản đầu tiên vẫn là **1.0.0**. Cookie `songngu_session` được giữ nguyên để tương thích các phiên đăng nhập hiện có. Ngôn ngữ giao diện dùng khóa localStorage `transqora.uiLocale`; khi nâng cấp, lựa chọn từ khóa cũ `songngu.uiLocale` được chuyển sang khóa mới để không làm mất ngôn ngữ người dùng đã chọn.
 
 Ứng dụng web dịch hội thoại hai chiều: dùng chung một điện thoại hoặc mỗi người một điện thoại. React/Vite, FastAPI/WebSocket, SQLite/SQLAlchemy/Alembic. Nhận dạng chạy local bằng [NVIDIA Nemotron 3.5 ASR](https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b); dịch văn bản qua gateway tương thích OpenAI. Giao diện hỗ trợ Việt/Anh/Trung.
 
@@ -48,6 +69,16 @@ Mở **http://localhost:38471**, đăng nhập bằng admin đã cấu hình; **
 - Quyền admin là cờ bền trong database, không còn cấp quyền dựa trên việc người dùng tự đăng ký tên. Đăng ký công khai chỉ tạo user thường.
 - Bản cài mới thiếu thông tin bootstrap/khoá mã hoá sẽ báo lỗi; không có mật khẩu mặc định yếu.
 - Cổng `38471` ít phổ biến hơn 8080; vẫn cần kiểm tra xung đột và đổi `APP_PORT` nếu cần. Backend không được publish ra host. Port khác thường không thay thế firewall/xác thực.
+
+## Feedback, phiên bản và ủng hộ
+
+- Mở nhóm **Cộng đồng** trên header để tới `/feedback`, `/updates`, `/support`. Ba trang đều xem được khi chưa đăng nhập; chỉ tài khoản chính thức được gửi feedback.
+- Feedback là văn bản công khai ngay sau khi gửi (10–2.000 ký tự, tối đa 5 góp ý mới/phút/tài khoản). Không chia sẻ dữ liệu nhạy cảm. Admin mở `/admin/feedback` để ẩn/hiện nội dung không phù hợp; xóa tài khoản sẽ xóa feedback của tài khoản đó.
+- Admin mở `/admin/support`, nhập lời kêu gọi, chọn ảnh QR thật rồi **Lưu thay đổi**. Chọn ảnh chỉ tạo bản xem trước, chưa công bố. PNG/JPEG/WebP tối đa 2 MiB, mỗi chiều tối đa 4.096 px, không nhận ảnh động. Ảnh được xác thực/chuẩn hóa và lưu cùng nội dung trong database; sao lưu database bao gồm cả QR. Nếu có xung đột với admin khác, tải lại cấu hình trước khi sửa tiếp.
+- Khi chưa tải QR, trang ủng hộ hiện thông báo chưa thiết lập; không có QR hoặc thông tin thanh toán giả. Ứng dụng chỉ hiển thị QR, không xử lý hay xác nhận giao dịch. Người ủng hộ tự kiểm tra thông tin người nhận.
+- Lịch sử phiên bản được quản lý trong [dữ liệu release](<frontend/src/releases.js>), bắt đầu với **1.0.0 — Phiên bản đầu tiên**. Khi phát hành, thêm một mục đầu danh sách `releases` với `version`, `title`, các nhóm `features`/`improvements`/`fixes` cho `vi`, `en`, `zh-CN`; chỉ thêm `date` (YYYY-MM-DD) khi có ngày phát hành xác nhận. Không tự tạo các bản phát hành quá khứ.
+- Đồng bộ `currentVersion` và phiên bản trong [package frontend](<frontend/package.json>) bằng `npm version <version> --no-git-tag-version` từ thư mục frontend (cập nhật cả lockfile); đồng bộ version API khi đổi phiên bản ứng dụng. Chạy `npm test` và `npm run build` trước triển khai. Trang cập nhật là ghi chú phát hành, không phải chức năng tự nâng cấp phần mềm.
+- Kiểm thử cộng đồng đầy đủ: `cd frontend && npx playwright test tests/e2e/community.spec.js` (dùng backend giả lập ASR/dịch nhưng SQLite/API thật).
 
 ## Thiết lập gateway trong admin
 

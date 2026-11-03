@@ -41,6 +41,7 @@ from app.auth import (
     verify_password,
 )
 from app.bootstrap import bootstrap_admin
+from app.community import create_community_router, initialize_support
 from app.config import LANGUAGES, WS_PING_INTERVAL, WS_PONG_DEADLINE, Settings
 from app.db import Database
 from app.gateway_settings import GatewaySettingsStore
@@ -83,6 +84,7 @@ def create_app(settings=None, recognizer=None, translator=None):
         database.migrate()
         gateway_settings.initialize()
         speech_settings.initialize()
+        initialize_support(database)
         bootstrap_admin(database, settings)
         with database.session() as db:
             db.execute(delete(Session).where(Session.expires_at < utcnow()))
@@ -100,7 +102,7 @@ def create_app(settings=None, recognizer=None, translator=None):
         await recognizer.close()
         database.engine.dispose()
 
-    app = FastAPI(title="Song Ngữ API", version="1.0.0", lifespan=lifespan)
+    app = FastAPI(title="Transqora API", version="1.0.0", lifespan=lifespan)
     app.state.database = database
     app.state.settings = settings
     app.state.recognizer = recognizer
@@ -558,6 +560,7 @@ def create_app(settings=None, recognizer=None, translator=None):
                     hub.drain_capture(connection, room.mode, stream, flush=False)
                 await hub.broadcast_presence(room_id)
 
+    app.include_router(create_community_router(database))
     app.include_router(create_admin_router(settings, database, hub, auth_rate_limit))
     return app
 

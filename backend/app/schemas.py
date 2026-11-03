@@ -204,5 +204,40 @@ class TextMessage(BaseModel):
         return value.strip()
 
 
+class FeedbackCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    content: str = Field(min_length=10, max_length=2000)
+    client_request_id: str = Field(min_length=8, max_length=100)
+
+    @field_validator("content", "client_request_id", mode="before")
+    @classmethod
+    def trim_text(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+
+class FeedbackVisibilityPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    is_hidden: bool = Field(strict=True)
+
+
+class SupportPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+
+    content: str = Field(min_length=1, max_length=5000)
+    revision: int = Field(strict=True, ge=0)
+    # Omitted preserves the current image; explicit null removes it.
+    qr_base64: str | None = Field(default=None, max_length=2796204, repr=False)
+
+    @field_validator("content")
+    @classmethod
+    def not_blank(cls, value):
+        value = value.strip()
+        if not value:
+            raise ValueError("Nội dung không được để trống.")
+        return value
+
+
 class AssignSpeaker(BaseModel):
     speaker: Literal["A", "B"]

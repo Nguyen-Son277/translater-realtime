@@ -1,4 +1,4 @@
-import { ArrowUpRight, AudioLines, BookOpen, LogOut, MessageCircleMore, Settings, ShieldCheck, X } from 'lucide-react';
+import { ArrowUpRight, AudioLines, BookOpen, LogOut, Menu, MessageCircleMore, Settings, ShieldCheck, X } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from './api';
@@ -8,9 +8,33 @@ import { useI18n, LanguageSelector } from './i18n';
 export function Brand({ light = false }) {
   const { t } = useI18n();
   return <Link to="/" className={`brand ${light ? 'brand-light' : ''}`} aria-label={t('common.home')}>
-    <span className="brand-mark"><MessageCircleMore size={22} /><span /></span>
-    <span>song<span className="brand-dot">ngữ.</span></span>
+    <img className="brand-logo" src={light ? '/brand/logo-mono-light.svg' : '/brand/logo.svg'} width="340" height="64" alt="" aria-hidden="true" />
   </Link>;
+}
+
+export function CommunityNavigation() {
+  const { t } = useI18n();
+  const location = useLocation();
+  const ref = useRef(null);
+  useEffect(() => { if (ref.current) ref.current.open = false; }, [location.pathname]);
+  useEffect(() => {
+    const close = event => {
+      if (event.type === 'keydown' && event.key !== 'Escape') return;
+      if (event.type === 'pointerdown' && ref.current?.contains(event.target)) return;
+      if (ref.current?.open) {
+        ref.current.open = false;
+        if (event.type === 'keydown') ref.current.querySelector('summary').focus();
+      }
+    };
+    document.addEventListener('pointerdown', close);
+    document.addEventListener('keydown', close);
+    return () => { document.removeEventListener('pointerdown', close); document.removeEventListener('keydown', close); };
+  }, []);
+  const links = () => ['feedback', 'updates', 'support'].map(page => <Link key={page} to={`/${page}`} aria-current={location.pathname === `/${page}` ? 'page' : undefined}>{t(`community.${page}`)}</Link>);
+  return <>
+    <nav className="community-desktop-nav" aria-label={t('community.nav')}>{links()}</nav>
+    <details className="community-mobile-nav" ref={ref}><summary aria-label={t('community.nav')}><Menu size={19} /><span>{t('community.nav')}</span></summary><nav aria-label={t('community.nav')}>{links()}</nav></details>
+  </>;
 }
 
 export function Header() {
@@ -27,6 +51,7 @@ export function Header() {
       <span className="header-tagline private-badge"><AudioLines size={14} /> <span>{t('common.tagline')}</span></span>
     </div>
     <div className="header-right">
+      <CommunityNavigation />
       <div className="header-lang-group">
         {user?.is_admin && <Link className="header-guide-btn" to="/admin" aria-label={t('common.adminNav')} title={t('common.adminNav')}><ShieldCheck size={19} /></Link>}
         <Link className="header-guide-btn" to="/guide" aria-label={t('guide.nav')} title={t('guide.nav')}><BookOpen size={19} /></Link>

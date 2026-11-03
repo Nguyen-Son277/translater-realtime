@@ -12,7 +12,11 @@ import { GuideArticlePage } from './pages/GuideArticlePage';
 import { GuideIndexPage } from './pages/GuideIndexPage';
 import { JoinPage } from './pages/JoinPage';
 import { RoomPage } from './pages/RoomPage';
+import { FeedbackPage, AdminFeedbackPage } from './pages/FeedbackPage';
+import { SupportPage, AdminSupportPage } from './pages/SupportPage';
+import { UpdatesPage } from './pages/UpdatesPage';
 import './styles.css';
+import './community.css';
 
 function NotFoundPage() {
   const { t } = useI18n();
@@ -21,6 +25,11 @@ function NotFoundPage() {
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode><BrowserRouter><I18nProvider><AuthProvider><Routes>
+    <Route path="/feedback" element={<FeedbackPage />} />
+    <Route path="/updates" element={<UpdatesPage />} />
+    <Route path="/support" element={<SupportPage />} />
+    <Route path="/admin/feedback" element={<RequireAuth><RequireAdmin><AdminFeedbackPage /></RequireAdmin></RequireAuth>} />
+    <Route path="/admin/support" element={<RequireAuth><RequireAdmin><AdminSupportPage /></RequireAdmin></RequireAuth>} />
     <Route path="/login" element={<AuthPage />} />
     <Route path="/" element={<RequireAuth><Dashboard /></RequireAuth>} />
     <Route path="/admin" element={<RequireAuth><RequireAdmin><AdminAccountsPage /></RequireAdmin></RequireAuth>} />

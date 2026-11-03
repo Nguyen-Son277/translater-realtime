@@ -7,6 +7,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -46,6 +47,32 @@ class User(Base):
         Boolean, nullable=False, default=False, server_default=false(),
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class Feedback(Base):
+    __tablename__ = "feedback"
+    __table_args__ = (
+        UniqueConstraint("author_id", "client_request_id"),
+        Index("ix_feedback_visibility_created", "is_hidden", "created_at", "id"),
+        Index("ix_feedback_author_created", "author_id", "created_at"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    author_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    author_name: Mapped[str] = mapped_column(String(100))
+    content: Mapped[str] = mapped_column(Text)
+    client_request_id: Mapped[str] = mapped_column(String(100))
+    is_hidden: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class SupportSettings(Base):
+    __tablename__ = "support_settings"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    content: Mapped[str] = mapped_column(Text)
+    qr_image: Mapped[bytes | None] = mapped_column(LargeBinary)
+    qr_media_type: Mapped[str | None] = mapped_column(String(32))
+    revision: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class SpeechSettings(Base):

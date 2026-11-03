@@ -10,6 +10,7 @@ from sqlalchemy import delete, select
 
 from app.models import Membership, Room, Session, User, utcnow
 
+# Keep the legacy cookie name so the Transqora rename does not invalidate active sessions.
 COOKIE_NAME = "songngu_session"
 passwords = PasswordHasher()
 

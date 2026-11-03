@@ -1,3 +1,4 @@
+import { communityTranslations } from './community.js';
 import { common } from './common.js';
 import { room } from './room.js';
 import { join } from './join.js';
@@ -9,21 +10,21 @@ import { guide } from './guide.js';
 const extra = {
   vi: {
     "common.selectLanguage": "Chọn ngôn ngữ giao diện",
-    "common.documentTitle": "Song Ngữ — Hội thoại không khoảng cách",
+    "common.documentTitle": "Transqora — Hội thoại không khoảng cách",
     "common.backHome": "Về trang chủ",
     "common.notFoundPage": "Không tìm thấy trang.",
     "common.retry": "Thử lại",
   },
   en: {
     "common.selectLanguage": "Select interface language",
-    "common.documentTitle": "Song Ngữ — Bridging Languages",
+    "common.documentTitle": "Transqora — Bridging Languages",
     "common.backHome": "Back to home",
     "common.notFoundPage": "Page not found.",
     "common.retry": "Try again",
   },
   "zh-CN": {
     "common.selectLanguage": "选择界面语言",
-    "common.documentTitle": "Song Ngữ — 跨越语言的对话",
+    "common.documentTitle": "Transqora — 跨越语言的对话",
     "common.backHome": "返回首页",
     "common.notFoundPage": "未找到页面。",
     "common.retry": "重试",
@@ -37,9 +38,9 @@ export const SUPPORTED_LOCALES = [
 ];
 
 export const translations = {
-  vi: { ...common.vi, ...room.vi, ...join.vi, ...admin.vi, ...settings.vi, ...extra.vi, ...guide.vi },
-  en: { ...common.en, ...room.en, ...join.en, ...admin.en, ...settings.en, ...extra.en, ...guide.en },
-  'zh-CN': { ...common['zh-CN'], ...room['zh-CN'], ...join['zh-CN'], ...admin['zh-CN'], ...settings['zh-CN'], ...extra['zh-CN'], ...guide['zh-CN'] },
+  vi: { ...communityTranslations.vi, ...common.vi, ...room.vi, ...join.vi, ...admin.vi, ...settings.vi, ...extra.vi, ...guide.vi },
+  en: { ...communityTranslations.en, ...common.en, ...room.en, ...join.en, ...admin.en, ...settings.en, ...extra.en, ...guide.en },
+  'zh-CN': { ...communityTranslations['zh-CN'], ...common['zh-CN'], ...room['zh-CN'], ...join['zh-CN'], ...admin['zh-CN'], ...settings['zh-CN'], ...extra['zh-CN'], ...guide['zh-CN'] },
 };
 
 export { errorMessages };

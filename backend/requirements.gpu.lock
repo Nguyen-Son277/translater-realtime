@@ -187,6 +187,8 @@ packaging==26.3
     #   lazy-loader
     #   pooch
     #   transformers
+pillow==12.3.0
+    # via -r backend/requirements.txt
 platformdirs==4.14.3
     # via pooch
 pooch==1.9.0

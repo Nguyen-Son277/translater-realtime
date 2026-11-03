@@ -2,25 +2,18 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { Globe2 } from 'lucide-react';
 import { SUPPORTED_LOCALES, translations, errorMessages } from './locales/index.js';
 
-const STORAGE_KEY = 'songngu.uiLocale';
-const DEFAULT_LOCALE = 'vi';
+import { readLocale, persistLocale } from './localeStorage.js';
 
+const DEFAULT_LOCALE = 'vi';
 const VALID_CODES = new Set(SUPPORTED_LOCALES.map(item => item.code));
 
 function getSavedLocale() {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved && VALID_CODES.has(saved)) {
-      return saved;
-    }
-  } catch {}
-  return DEFAULT_LOCALE;
+  try { return readLocale(localStorage, VALID_CODES, DEFAULT_LOCALE); }
+  catch { return DEFAULT_LOCALE; }
 }
 
 function saveLocale(code) {
-  try {
-    localStorage.setItem(STORAGE_KEY, code);
-  } catch {}
+  try { persistLocale(localStorage, code); } catch {}
 }
 
 const I18nContext = createContext(null);
@@ -53,6 +46,10 @@ export function I18nProvider({ children }) {
     }
     return template;
   }, [locale]);
+
+  useEffect(() => {
+    document.title = t('common.documentTitle');
+  }, [t]);
 
   const localizeError = useCallback(error => {
     if (!error) return '';

@@ -1,7 +1,7 @@
 export const guide = {
   vi: {
     "guide.nav": "Hướng dẫn sử dụng",
-    "guide.title": "Hướng dẫn sử dụng Song Ngữ",
+    "guide.title": "Hướng dẫn sử dụng Transqora",
     "guide.subtitle": "Chọn một chủ đề để xem hướng dẫn chi tiết. Mỗi hướng dẫn nằm trên một trang riêng và có liên kết tới các hướng dẫn khác.",
     "guide.crumb": "Đường dẫn hướng dẫn",
     "guide.backHome": "Về trang chủ",
@@ -22,7 +22,7 @@ export const guide = {
   },
   en: {
     "guide.nav": "User guide",
-    "guide.title": "Song Ngữ user guide",
+    "guide.title": "Transqora user guide",
     "guide.subtitle": "Pick a topic to read the detailed guide. Each guide has its own page and links to the other guides.",
     "guide.crumb": "Guide path",
     "guide.backHome": "Back to home",
@@ -43,7 +43,7 @@ export const guide = {
   },
   "zh-CN": {
     "guide.nav": "使用指南",
-    "guide.title": "Song Ngữ 使用指南",
+    "guide.title": "Transqora 使用指南",
     "guide.subtitle": "选择一个主题查看详细指南。每篇指南都有独立页面，并与其他指南相互链接。",
     "guide.crumb": "指南路径",
     "guide.backHome": "返回首页",

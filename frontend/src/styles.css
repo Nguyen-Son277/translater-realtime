@@ -38,10 +38,9 @@ small { font-size: 1.125rem; }
 .mt-5 { margin-top: 20px; }
 .text-button { display: inline-flex; align-items: center; gap: 5px; font-size: 1.125rem; color: #457353; border: 0; background: transparent; padding: 8px 0; font-weight: 500; text-decoration: underline; text-underline-offset: 3px; }
 .text-link { display: inline-flex; align-items: center; gap: 7px; color: #457353; font-weight: 500; }
-.brand { display: inline-flex; align-items: center; gap: 10px; font-size: 1.75rem; font-weight: 750; letter-spacing: -1.5px; color: #254934; flex-shrink: 0; }
-.brand-dot { font-weight: 450; }
-.brand-mark { display: flex; align-items: center; justify-content: center; position: relative; color: #fff; background: #254934; width: 36px; height: 36px; border-radius: 12px; }
-.brand-mark > span { position: absolute; width: 11px; height: 11px; background: #b7a6d5; border: 2px solid #f6f7f2; border-radius: 4px; right: -3px; bottom: -1px; }
+.brand { display: inline-flex; align-items: center; flex-shrink: 0; max-width: 100%; }
+.brand-logo { display: block; width: auto; height: 38px; max-width: 100%; }
+@media (max-width: 760px) { .brand-logo { height: 34px; } }
 .section-kicker { font-size: 1rem; letter-spacing: 1.8px; font-weight: 650; color: #52634b; }
 .eyebrow { display: flex; align-items: center; gap: 9px; font-size: 1rem; letter-spacing: 1.8px; font-weight: 600; color: #6f8067; }
 .status-dot { width: 6px; height: 6px; display: inline-block; background: #749b64; border-radius: 100%; flex-shrink: 0; }
@@ -389,9 +388,6 @@ small { font-size: 1.125rem; }
   .auth-form-wrap > .section-kicker { font-size: 1rem; letter-spacing: 1.4px; }
   .auth-bottom { margin-top: auto; }
   .site-header { height: auto; min-height: 80px; padding: 10px 16px; flex-wrap: wrap; gap: 8px 12px; }
-  .brand { font-size: 1.75rem; gap: 8px; }
-  .brand-mark { width: 32px; height: 32px; border-radius: 10px; }
-  .brand-mark > svg { width: 20px; }
   .header-left { flex: 1 1 auto; }
   .header-right { flex: 1 1 100%; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
   .header-guide-btn { width: 44px; height: 44px; min-width: 44px; min-height: 44px; }

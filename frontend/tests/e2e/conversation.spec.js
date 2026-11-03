@@ -72,7 +72,7 @@ for (const signedIn of [false, true]) test(`two phones exchange both directions 
   const a = await first.newPage(), b = await second.newPage();
   await register(a); await create(a, 'remote');
   await a.getByRole('button', { name: 'Mời bạn' }).click();
-  await expect(a.getByRole('img', { name: 'QR tham gia phòng Song Ngữ' })).toBeVisible();
+  await expect(a.getByRole('img', { name: 'QR tham gia phòng Transqora' })).toBeVisible();
   const invitation = await a.getByLabel('Liên kết mời').inputValue();
   await a.getByRole('button', { name: 'Đóng', exact: true }).click();
   if (signedIn) await register(b);

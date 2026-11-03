@@ -13,7 +13,7 @@ test('the guide index is public, lists every guide as a link and holds no guide 
   await page.goto('/guide');
 
   await expect(page).toHaveURL(/\/guide$/);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Hướng dẫn sử dụng Song Ngữ');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Hướng dẫn sử dụng Transqora');
   const cards = page.locator('.guide-card');
   await expect(cards).toHaveCount(18);
   // The index must be a link hub, not the guides themselves.
@@ -101,12 +101,12 @@ test('guide pages and the index reflow at narrow widths and keep wide tables scr
 
 test('the whole guide follows the interface language', async ({ page }) => {
   await page.goto('/guide');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Hướng dẫn sử dụng Song Ngữ');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Hướng dẫn sử dụng Transqora');
   await expect(page.locator('.guide-card').first()).toContainText('Tổng quan');
 
   await page.getByRole('combobox', { name: 'Chọn ngôn ngữ giao diện' }).selectOption('en');
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Song Ngữ user guide');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Transqora user guide');
   await expect(page.locator('.guide-card').first()).toContainText('Overview');
   await expect(page.getByText(/only (?:written )?in Vietnamese/)).toHaveCount(0);
 
@@ -125,7 +125,7 @@ test('the whole guide follows the interface language', async ({ page }) => {
   await page.goto('/guide');
   await expect(page.locator('.guide-card').first()).toContainText('总览');
   await page.getByRole('combobox', { name: '选择界面语言' }).selectOption('vi');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Hướng dẫn sử dụng Song Ngữ');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Hướng dẫn sử dụng Transqora');
 });
 
 test('the shared header and the login page link to the guide index', async ({ page }) => {

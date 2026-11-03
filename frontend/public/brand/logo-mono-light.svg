@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 64" fill="none" role="img" aria-label="Transqora">
+  <path d="M20 42a17 17 0 1 1 28-18" stroke="#F6F7F2" stroke-width="6.5" stroke-linecap="round"/>
+  <path d="M49 33a17 17 0 0 1-17 14M32 33l16 17" stroke="#F6F7F2" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <g stroke="#F6F7F2" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M83 18h26M96 18v29"/>
+    <path d="M119 47V29m0 8q2-10 12-8"/>
+    <path d="M157 30v17m0-9a9 9 0 1 0-18 0 9 9 0 1 0 18 0"/>
+    <path d="M169 47V29m0 8q0-9 8-9t8 9v10"/>
+    <path d="M212 30q-15-6-15 3 0 4 8 5t8 5q0 8-17 3"/>
+    <path d="M242 30v25m0-17a9 9 0 1 0-18 0 9 9 0 1 0 18 0"/>
+    <path d="M272 38a9 9 0 1 0-18 0 9 9 0 1 0 18 0"/>
+    <path d="M284 47V29m0 8q2-10 12-8"/>
+    <path d="M324 30v17m0-9a9 9 0 1 0-18 0 9 9 0 1 0 18 0"/>
+  </g>
+</svg>

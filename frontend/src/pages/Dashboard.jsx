@@ -104,7 +104,7 @@ export function Dashboard() {
           {room.owner_id === user.id && <button className="delete-room icon-btn" aria-label={t('dashboard.deleteNamed', { name: room.title })} title={t('dashboard.delete')} onClick={() => setModal({ type: 'delete', room })}><Trash2 size={16} /></button>}
         </article>)}</div> : <div className="history-empty"><span className="history-empty-icon"><MessageCircleMore size={27} /></span><div><h3>{query ? t('dashboard.notFound') : t('dashboard.empty')}</h3><p>{query ? t('dashboard.searchHint') : t(user.is_guest ? 'join.guestEmptyHint' : 'dashboard.emptyHint')}</p></div>{!query && !user.is_guest && <button className="icon-btn" aria-label={t('dashboard.createFirst')} onClick={() => setModal({ type: 'create' })}><Plus size={21} /></button>}</div>}
       </section>
-      <footer className="dashboard-footer"><span>songngữ.</span><p>{t('dashboard.footer')}</p><span className="footer-indicator"><span /> {t('dashboard.audioPrivacy')}</span></footer>
+      <footer className="dashboard-footer"><span>Transqora</span><p>{t('dashboard.footer')}</p><span className="footer-indicator"><span /> {t('dashboard.audioPrivacy')}</span></footer>
     </main>
     {modal?.type === 'create' && <CreateRoom onClose={close} />}
     {modal?.type === 'join' && <JoinModal onClose={close} />}

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { openHeaderMenu } from './helpers/navigation.js';
 
 async function invitation(context) {
   const username = `guest_${crypto.randomUUID().slice(0, 12)}`;
@@ -27,6 +28,7 @@ test('optional account sign-in preserves the public invitation', async ({ browse
     await guest.clearCookies();
     const page = await guest.newPage();
     await page.goto(url);
+    await openHeaderMenu(page);
     await page.getByRole('link', { name: 'Đăng nhập', exact: true }).click();
     await page.getByLabel('Tên đăng nhập', { exact: true }).fill(username);
     await page.locator('#password').fill('test-password-123');

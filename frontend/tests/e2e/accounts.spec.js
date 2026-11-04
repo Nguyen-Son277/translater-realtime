@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { openHeaderMenu } from './helpers/navigation.js';
 
 test('registration checks password confirmation and settings save email across login', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -22,6 +23,7 @@ test('registration checks password confirmation and settings save email across l
   await expect(page.getByRole('heading', { name: 'Hiểu nhau, ngay lúc này.' })).toBeVisible();
   await expect(page.getByText(`Xin chào ${name}.`, { exact: false })).toBeVisible();
 
+  await openHeaderMenu(page);
   await page.getByRole('button', { name: 'Cài đặt tài khoản' }).click();
   const dialog = page.getByRole('dialog', { name: 'Cài đặt tài khoản' });
   await expect(dialog.getByText(name, { exact: true })).toBeVisible();
@@ -33,9 +35,11 @@ test('registration checks password confirmation and settings save email across l
   await page.screenshot({ path: 'test-results/account-settings-mobile.png', fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.reload();
+  await openHeaderMenu(page);
   await page.getByRole('button', { name: 'Cài đặt tài khoản' }).click();
   await expect(dialog.getByLabel('Email', { exact: true })).toHaveValue(updatedEmail);
   await dialog.getByRole('button', { name: 'Đóng', exact: true }).click();
+  await openHeaderMenu(page);
   await page.getByRole('button', { name: 'Đăng xuất', exact: true }).click();
   await expect(page.getByRole('tab', { name: 'Đăng nhập' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByLabel('Họ và tên', { exact: true })).toHaveCount(0);
@@ -43,11 +47,13 @@ test('registration checks password confirmation and settings save email across l
   await page.getByLabel('Tên đăng nhập', { exact: true }).fill(username);
   await page.locator('#password').fill('test-password-123');
   await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
+  await openHeaderMenu(page);
   await page.getByRole('button', { name: 'Cài đặt tài khoản' }).click();
   await expect(dialog.getByLabel('Email', { exact: true })).toHaveValue(updatedEmail);
   await dialog.getByRole('button', { name: 'Đóng', exact: true }).click();
   await expect(dialog).not.toBeVisible();
-  await expect(page.getByRole('button', { name: 'Cài đặt tài khoản' })).toBeFocused();
+  // Settings closes the collapsed panel, so focus returns to its visible toggle.
+  await expect(page.locator('button.header-menu-toggle')).toBeFocused();
 });
 
 test('elder-friendly typography and account screens fit narrow widths', async ({ page }) => {

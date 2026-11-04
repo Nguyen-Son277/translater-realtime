@@ -9,6 +9,9 @@ import { guide } from './guide.js';
 
 const extra = {
   vi: {
+    "common.navigation": "Điều hướng chính",
+    "common.openMenu": "Mở menu điều hướng",
+    "common.closeMenu": "Đóng menu điều hướng",
     "common.selectLanguage": "Chọn ngôn ngữ giao diện",
     "common.documentTitle": "Transqora — Hội thoại không khoảng cách",
     "common.backHome": "Về trang chủ",
@@ -16,6 +19,9 @@ const extra = {
     "common.retry": "Thử lại",
   },
   en: {
+    "common.navigation": "Main navigation",
+    "common.openMenu": "Open navigation menu",
+    "common.closeMenu": "Close navigation menu",
     "common.selectLanguage": "Select interface language",
     "common.documentTitle": "Transqora — Bridging Languages",
     "common.backHome": "Back to home",
@@ -23,6 +29,9 @@ const extra = {
     "common.retry": "Try again",
   },
   "zh-CN": {
+    "common.navigation": "主导航",
+    "common.openMenu": "打开导航菜单",
+    "common.closeMenu": "关闭导航菜单",
     "common.selectLanguage": "选择界面语言",
     "common.documentTitle": "Transqora — 跨越语言的对话",
     "common.backHome": "返回首页",

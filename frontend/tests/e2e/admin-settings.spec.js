@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { openHeaderMenu } from './helpers/navigation.js';
 
 const endpoint = '/api/admin/settings/translation';
 const initial = { base_url: 'https://gateway.example/v1', model: 'translator-1', api_key_configured: true, configured: true, revision: 7 };
@@ -134,6 +135,7 @@ test('settings fit mobile and desktop in every interface locale', async ({ page 
   await mockSettings(page);
   await openSettings(page);
   for (const locale of ['vi', 'en', 'zh-CN']) {
+    await openHeaderMenu(page);
     await page.locator('.language-select').selectOption(locale);
     for (const width of [320, 390, 1280]) {
       await page.setViewportSize({ width, height: 844 });
@@ -284,6 +286,7 @@ test('non-admin users cannot enter settings and anonymous users must sign in', a
   await mockSettings(page, { user: { ...admin, is_admin: false } });
   await page.goto('/admin/settings');
   await expect(page).toHaveURL(/\/$/);
+  await openHeaderMenu(page);
   await expect(page.getByRole('link', { name: 'Quản trị', exact: true })).toHaveCount(0);
   await page.unroute('**/api/auth/me');
   await page.route('**/api/auth/me', route => json(route, { detail: 'Unauthorized' }, 401));

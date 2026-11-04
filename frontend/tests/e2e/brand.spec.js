@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { openHeaderMenu } from './helpers/navigation.js';
 
 const account = { id: 'brand-test', username: 'tester', name: 'Tester', is_admin: false };
 async function mockAuth(page, authenticated = false) {
@@ -20,8 +21,10 @@ test('brand logo, localized title and favicon assets are wired on every public s
     expect(await logo.evaluate(img => img.complete && img.naturalWidth > 0)).toBeTruthy();
     await expect(page.locator('body')).not.toContainText('Song Ngữ');
   }
+  await openHeaderMenu(page);
   await page.getByLabel('Chọn ngôn ngữ giao diện').selectOption('en');
   await expect(page).toHaveTitle('Transqora — Bridging Languages');
+  await openHeaderMenu(page);
   await page.getByLabel('Select interface language').selectOption('zh-CN');
   await expect(page).toHaveTitle('Transqora — 跨越语言的对话');
   await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute('href', /apple-touch-icon/);
@@ -43,6 +46,7 @@ test('legacy locale migrates without losing preference, new key wins on next vis
   await page.goto('/guide');
   await expect(page).toHaveTitle('Transqora — Bridging Languages');
   expect(await page.evaluate(() => localStorage.getItem('transqora.uiLocale'))).toBe('en');
+  await openHeaderMenu(page);
   await page.getByLabel('Select interface language').selectOption('zh-CN');
   await page.reload();
   await expect(page).toHaveTitle('Transqora — 跨越语言的对话');

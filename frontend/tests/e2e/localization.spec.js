@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { openHeaderMenu } from './helpers/navigation.js';
 
 test('auth page allows switching between Vietnamese, English, and Chinese, and preserves choice across reloads', async ({ page }) => {
   await page.goto('/login');
@@ -58,6 +59,7 @@ test('dashboard and room reflect language changes across screens without horizon
   await expect(page.getByRole('heading', { name: 'Hiểu nhau, ngay lúc này.' })).toBeVisible();
 
   // Change to English via Header selector
+  await openHeaderMenu(page);
   await page.getByRole('combobox', { name: 'Chọn ngôn ngữ giao diện' }).selectOption('en');
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   await expect(page.getByRole('heading', { name: 'Understand each other, right here, right now.' })).toBeVisible();
@@ -79,6 +81,7 @@ test('dashboard and room reflect language changes across screens without horizon
 
   // Switch to Chinese while in Dashboard
   await page.keyboard.press('Escape');
+  await openHeaderMenu(page);
   await page.getByRole('combobox', { name: 'Select interface language' }).selectOption('zh-CN');
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-Hans');
   await expect(page.getByRole('heading', { name: '理解彼此， 就在此刻。' })).toBeVisible();

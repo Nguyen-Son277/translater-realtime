@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { openHeaderMenu } from './helpers/navigation.js';
 import { groupedArticles } from '../../src/guide/index.js';
 
 const SLUGS = [
@@ -104,6 +105,7 @@ test('the whole guide follows the interface language', async ({ page }) => {
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Hướng dẫn sử dụng Transqora');
   await expect(page.locator('.guide-card').first()).toContainText('Tổng quan');
 
+  await openHeaderMenu(page);
   await page.getByRole('combobox', { name: 'Chọn ngôn ngữ giao diện' }).selectOption('en');
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Transqora user guide');
@@ -117,6 +119,7 @@ test('the whole guide follows the interface language', async ({ page }) => {
   await expect(page.locator('.guide-content')).toContainText(micro.blocks.en.find(block => block.type === 'list').items[0].slice(0, 30).replaceAll('**', ''));
   await expect(page.getByRole('navigation', { name: 'Guide navigation' })).toBeVisible();
 
+  await openHeaderMenu(page);
   await page.getByRole('combobox', { name: 'Select interface language' }).selectOption('zh-CN');
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-Hans');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(micro.titles['zh-CN'].title);
@@ -124,6 +127,7 @@ test('the whole guide follows the interface language', async ({ page }) => {
 
   await page.goto('/guide');
   await expect(page.locator('.guide-card').first()).toContainText('总览');
+  await openHeaderMenu(page);
   await page.getByRole('combobox', { name: '选择界面语言' }).selectOption('vi');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Hướng dẫn sử dụng Transqora');
 });
@@ -135,6 +139,7 @@ test('the shared header and the login page link to the guide index', async ({ pa
 
   await page.goto('/guide/micro');
   const header = page.getByRole('banner');
+  await openHeaderMenu(page);
   await expect(header.getByRole('link', { name: 'Hướng dẫn sử dụng' })).toBeVisible();
   await header.getByRole('link', { name: 'Hướng dẫn sử dụng' }).click();
   await expect(page).toHaveURL(/\/guide$/);

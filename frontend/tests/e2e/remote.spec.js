@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { openHeaderMenu } from './helpers/navigation.js';
 
 async function account(context) {
   const username = `remote_${crypto.randomUUID().slice(0, 12)}`;
@@ -238,6 +239,7 @@ test('public invitation survives reload and guest microphone works without sign-
     await b.reload(); await expect(b.getByRole('status')).toHaveText('Đã kết nối');
     await b.getByRole('link', { name: 'Về danh sách hội thoại' }).click();
     await expect(b.getByRole('button', { name: 'Tạo cuộc trò chuyện', exact: true })).toHaveCount(0);
+    await openHeaderMenu(b);
     await expect(b.getByRole('button', { name: 'Cài đặt tài khoản' })).toHaveCount(0);
     await expect(b.getByText('Mời từ xa', { exact: true })).toBeVisible();
     await b.getByRole('link', { name: 'Đăng nhập', exact: true }).click();

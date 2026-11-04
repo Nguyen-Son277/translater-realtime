@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { openHeaderMenu } from './helpers/navigation.js';
 
 const ADMIN_PASSWORD = 'correct-password';
 const USER_PASSWORD = 'e2e-user-password-123';
@@ -28,6 +29,7 @@ async function login(page, username, password) {
 async function signInAdmin(page) {
   await login(page, 'admin', ADMIN_PASSWORD);
   await expect(dashboard(page)).toBeVisible();
+  await openHeaderMenu(page);
   await expect(page.getByRole('link', { name: 'Quản trị', exact: true })).toBeVisible();
 }
 
@@ -62,6 +64,7 @@ test('admin searches, filters, locks, resets and deletes an account across isola
   try {
     expect((await register(userPage, username, USER_PASSWORD)).ok()).toBe(true);
     await expect(dashboard(userPage)).toBeVisible();
+    await openHeaderMenu(userPage);
     await expect(userPage.getByRole('link', { name: 'Quản trị', exact: true })).toHaveCount(0);
     await userPage.goto('/admin');
     await expect(userPage).toHaveURL(`${baseURL}/`);
@@ -69,6 +72,7 @@ test('admin searches, filters, locks, resets and deletes an account across isola
     await expect(userPage.getByRole('heading', { name: 'Quản lý tài khoản' })).toHaveCount(0);
 
     await signInAdmin(page);
+    await openHeaderMenu(page);
     await page.getByRole('link', { name: 'Quản trị', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Quản lý tài khoản' })).toBeVisible();
     const search = page.getByRole('searchbox', { name: 'Tìm kiếm tài khoản' });
@@ -149,6 +153,7 @@ test('admin searches, filters, locks, resets and deletes an account across isola
     await changePassword(userPage, temporaryPassword, finalPassword);
     await userPage.reload();
     await expect(dashboard(userPage)).toBeVisible();
+    await openHeaderMenu(userPage);
     await userPage.getByRole('button', { name: 'Đăng xuất', exact: true }).click();
     await login(userPage, username, temporaryPassword);
     await expect(userPage.getByRole('alert')).toBeVisible();
@@ -254,6 +259,7 @@ test('admin changes own password with validation and restores the original crede
   let changed = false;
   await signInAdmin(page);
   try {
+    await openHeaderMenu(page);
     await page.getByRole('button', { name: 'Cài đặt tài khoản', exact: true }).click();
     const settings = page.getByRole('dialog', { name: 'Cài đặt tài khoản', exact: true });
     await settings.getByRole('link', { name: 'Đổi mật khẩu', exact: true }).click();
@@ -269,6 +275,7 @@ test('admin changes own password with validation and restores the original crede
     await expect(page.getByRole('alert')).toHaveText('Mật khẩu mới phải khác mật khẩu hiện tại.');
     await changePassword(page, ADMIN_PASSWORD, changedPassword);
     changed = true;
+    await openHeaderMenu(page);
     await page.getByRole('button', { name: 'Đăng xuất', exact: true }).click();
     await login(page, 'admin', ADMIN_PASSWORD);
     await expect(page.getByRole('alert')).toBeVisible();
@@ -277,9 +284,11 @@ test('admin changes own password with validation and restores the original crede
     await page.goto('/change-password');
     await changePassword(page, changedPassword, ADMIN_PASSWORD);
     changed = false;
+    await openHeaderMenu(page);
     await page.getByRole('button', { name: 'Đăng xuất', exact: true }).click();
     await login(page, 'admin', ADMIN_PASSWORD);
     await expect(dashboard(page)).toBeVisible();
+    await openHeaderMenu(page);
     await page.getByRole('link', { name: 'Quản trị', exact: true }).click();
     await page.getByRole('searchbox', { name: 'Tìm kiếm tài khoản' }).fill('admin');
     const row = accountRow(page, 'admin');

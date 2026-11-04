@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { openHeaderMenu } from './helpers/navigation.js';
 
 async function register(request) {
   const username = `feedback${Date.now()}${Math.floor(Math.random() * 1000)}`;
@@ -56,18 +57,22 @@ test('anonymous mobile navigation, version history and QR empty state', async ({
   await page.route('**/api/support', route => route.fulfill({ json: { content: 'Ủng hộ admin làm app mobile', qr_url: null, revision: 0 } }));
   await page.goto('/updates');
   await expect(page.getByRole('heading', { name: 'Phiên bản đầu tiên' })).toBeVisible();
-  await page.locator('.community-mobile-nav summary').click();
-  await page.locator('.community-mobile-nav').getByRole('link', { name: 'Ủng hộ', exact: true }).click();
+  await openHeaderMenu(page);
+  await page.locator('nav.header-navigation').getByRole('link', { name: 'Ủng hộ', exact: true }).click();
   await expect(page.getByText('QR ủng hộ chưa được thiết lập.')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
   await page.goto('/feedback');
   await expect(page.getByRole('link', { name: 'Đăng nhập để góp ý' })).toBeVisible();
-  await page.locator('.community-mobile-nav summary').focus();
+  const toggle = page.locator('button.header-menu-toggle');
+  await toggle.focus();
   await page.keyboard.press('Enter');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('.header-right[data-open="true"]')).toBeVisible();
   await page.keyboard.press('Tab');
-  await expect(page.locator('.community-mobile-nav a').first()).toBeFocused();
+  await expect(page.locator('nav.header-navigation a').first()).toBeFocused();
   await page.keyboard.press('Escape');
-  await expect(page.locator('.community-mobile-nav summary')).toBeFocused();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(toggle).toBeFocused();
 });
 
 test('failed submission preserves draft and uses same idempotency key on retry', async ({ page }) => {

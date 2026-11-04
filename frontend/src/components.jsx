@@ -1,6 +1,6 @@
 import { ArrowUpRight, AudioLines, BookOpen, LogOut, Menu, MessageCircleMore, Settings, ShieldCheck, X } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { api } from './api';
 import { useAuth } from './auth';
 import { useI18n, LanguageSelector } from './i18n';
@@ -15,26 +15,7 @@ export function Brand({ light = false }) {
 export function CommunityNavigation() {
   const { t } = useI18n();
   const location = useLocation();
-  const ref = useRef(null);
-  useEffect(() => { if (ref.current) ref.current.open = false; }, [location.pathname]);
-  useEffect(() => {
-    const close = event => {
-      if (event.type === 'keydown' && event.key !== 'Escape') return;
-      if (event.type === 'pointerdown' && ref.current?.contains(event.target)) return;
-      if (ref.current?.open) {
-        ref.current.open = false;
-        if (event.type === 'keydown') ref.current.querySelector('summary').focus();
-      }
-    };
-    document.addEventListener('pointerdown', close);
-    document.addEventListener('keydown', close);
-    return () => { document.removeEventListener('pointerdown', close); document.removeEventListener('keydown', close); };
-  }, []);
-  const links = () => ['feedback', 'updates', 'support'].map(page => <Link key={page} to={`/${page}`} aria-current={location.pathname === `/${page}` ? 'page' : undefined}>{t(`community.${page}`)}</Link>);
-  return <>
-    <nav className="community-desktop-nav" aria-label={t('community.nav')}>{links()}</nav>
-    <details className="community-mobile-nav" ref={ref}><summary aria-label={t('community.nav')}><Menu size={19} /><span>{t('community.nav')}</span></summary><nav aria-label={t('community.nav')}>{links()}</nav></details>
-  </>;
+  return ['feedback', 'updates', 'support'].map(page => <Link key={page} to={`/${page}`} aria-current={location.pathname === `/${page}` ? 'page' : undefined}>{t(`community.${page}`)}</Link>);
 }
 
 export function Header() {
@@ -43,31 +24,104 @@ export function Header() {
   const location = useLocation();
   const loginState = { from: location.pathname + location.search + location.hash };
   const [error, setError] = useState('');
+  const [loggingOut, setLoggingOut] = useState(false);
+  const logoutPending = useRef(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const closeSettings = useCallback(() => setSettingsOpen(false), []);
-  return <header className="site-header">
+  const headerRef = useRef(null);
+  const menuButtonRef = useRef(null);
+  const panelRef = useRef(null);
+  const settingsButtonRef = useRef(null);
+  const panelId = useId();
+  const closeSettings = useCallback(() => {
+    setSettingsOpen(false);
+    // Modal restores its original trigger first; a resize may have hidden it.
+    requestAnimationFrame(() => {
+      if (!headerRef.current?.isConnected) return;
+      const target = window.matchMedia('(max-width: 1400px)').matches ? menuButtonRef.current : settingsButtonRef.current;
+      target?.focus();
+    });
+  }, []);
+  const closeMenu = useCallback(() => {
+    // Restore focus before hiding the panel, including when a modal opens from it.
+    if (window.matchMedia('(max-width: 1400px)').matches && panelRef.current?.contains(document.activeElement)) {
+      menuButtonRef.current?.focus();
+    }
+    setMenuOpen(false);
+  }, []);
+
+  useEffect(() => { closeMenu(); }, [location, closeMenu]);
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 1400px)');
+    const onChange = () => {
+      if (media.matches) closeMenu();
+      else {
+        setMenuOpen(false);
+        if (document.activeElement === menuButtonRef.current) panelRef.current?.querySelector('a')?.focus();
+      }
+    };
+    media.addEventListener('change', onChange);
+    return () => media.removeEventListener('change', onChange);
+  }, [closeMenu]);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onPointerDown = event => {
+      if (!headerRef.current?.contains(event.target)) closeMenu();
+    };
+    const onKeyDown = event => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeMenu();
+        menuButtonRef.current?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [menuOpen, closeMenu]);
+
+  const openSettings = () => { closeMenu(); setSettingsOpen(true); };
+  const signOut = async () => {
+    if (logoutPending.current) return;
+    logoutPending.current = true;
+    setLoggingOut(true);
+    setError('');
+    try { await logout(); closeMenu(); }
+    catch (err) { setError(err.message); }
+    finally { logoutPending.current = false; setLoggingOut(false); }
+  };
+  const displayName = user ? (user.is_guest ? t('common.guest') : user.name || user.username || t('common.guest')) : '';
+  const isSection = path => location.pathname === path || location.pathname.startsWith(`${path}/`);
+
+  return <header className="site-header" ref={headerRef}>
     <div className="header-left">
       <Brand />
-      <span className="header-tagline private-badge"><AudioLines size={14} /> <span>{t('common.tagline')}</span></span>
+      <span className="header-tagline private-badge"><AudioLines size={14} aria-hidden="true" /> <span>{t('common.tagline')}</span></span>
     </div>
-    <div className="header-right">
-      <CommunityNavigation />
-      <div className="header-lang-group">
-        {user?.is_admin && <Link className="header-guide-btn" to="/admin" aria-label={t('common.adminNav')} title={t('common.adminNav')}><ShieldCheck size={19} /></Link>}
-        <Link className="header-guide-btn" to="/guide" aria-label={t('guide.nav')} title={t('guide.nav')}><BookOpen size={19} /></Link>
-        <LanguageSelector />
-      </div>
+    <button type="button" className="icon-btn header-menu-toggle" ref={menuButtonRef} aria-expanded={menuOpen} aria-controls={panelId} aria-label={t(menuOpen ? 'common.closeMenu' : 'common.openMenu')} onClick={() => setMenuOpen(open => !open)}>
+      {menuOpen ? <X size={23} aria-hidden="true" /> : <Menu size={23} aria-hidden="true" />}
+    </button>
+    <div id={panelId} ref={panelRef} className="header-right" data-open={menuOpen} onClick={event => { if (event.target.closest('a[href]')) closeMenu(); }}>
+      <nav className="header-navigation" aria-label={t('common.navigation')}>
+        <CommunityNavigation />
+        {user?.is_admin && <Link className="header-guide-btn" to="/admin" aria-current={isSection('/admin') ? 'page' : undefined} aria-label={t('common.adminNav')} title={t('common.adminNav')}><ShieldCheck size={19} aria-hidden="true" /><span className="header-action-label">{t('common.adminNav')}</span></Link>}
+        <Link className="header-guide-btn" to="/guide" aria-current={isSection('/guide') ? 'page' : undefined} aria-label={t('guide.nav')} title={t('guide.nav')}><BookOpen size={19} aria-hidden="true" /><span className="header-action-label">{t('guide.nav')}</span></Link>
+      </nav>
+      <div className="header-lang-group" onChange={closeMenu}><LanguageSelector /></div>
       <div className="header-divider" aria-hidden="true" />
       {user ? <div className="header-user-group">
-        <span className="user-chip" title={user.is_guest ? t('common.guest') : user.name || user.username}>
-          <span className="avatar">{(user.is_guest ? t('common.guest') : user.name || user.username)[0].toUpperCase()}</span>
-          <span className="user-name">{user.is_guest ? t('common.guest') : user.name || user.username}</span>
+        <span className="user-chip" title={displayName}>
+          <span className="avatar" aria-hidden="true">{displayName[0]?.toUpperCase()}</span>
+          <span className="user-name">{displayName}</span>
         </span>
-        {user.is_guest ? <Link className="text-button" to="/login" state={loginState}>{t('auth.login')}</Link> : <button className="icon-btn header-action-btn" aria-label={t('common.settings')} title={t('common.settings')} onClick={() => setSettingsOpen(true)}><Settings size={18} /></button>}
-        <button className="icon-btn header-action-btn" aria-label={t('common.logout')} title={error ? localizeError(error) : t('common.logout')} onClick={() => logout().catch(err => setError(err.message))}><LogOut size={18} /></button>
+        {user.is_guest ? <Link className="text-button" to="/login" state={loginState}>{t('auth.login')}</Link> : <button type="button" className="icon-btn header-action-btn" aria-label={t('common.settings')} title={t('common.settings')} ref={settingsButtonRef} onClick={openSettings}><Settings size={18} aria-hidden="true" /><span className="header-action-label">{t('common.settings')}</span></button>}
+        <button type="button" className="icon-btn header-action-btn" aria-label={t('common.logout')} title={t('common.logout')} disabled={loggingOut} aria-busy={loggingOut} onClick={signOut}><LogOut size={18} aria-hidden="true" /><span className="header-action-label">{t('common.logout')}</span></button>
       </div> : <Link className="text-button" to="/login" state={loginState}>{t('auth.login')}</Link>}
-      {error && <span role="alert" className="header-error">{localizeError(error)}</span>}
     </div>
+    {error && <span role="alert" className="header-error">{localizeError(error)}</span>}
     {settingsOpen && user && !user.is_guest && <AccountSettings user={user} onSaved={setUser} onClose={closeSettings} />}
   </header>;
 }
